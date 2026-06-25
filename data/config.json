@@ -1,0 +1,52 @@
+{
+  "haUrl": "http://test:8123",
+  "haToken": "secret123",
+  "entities": {
+    "poolTemp": "sensor.pool_water_temperature",
+    "outlet1": "sensor.heatpump_outlet_temp_1",
+    "outlet2": "sensor.heatpump_outlet_temp_2",
+    "solar": "sensor.solar_power",
+    "outdoor": "sensor.outdoor_temperature",
+    "hpPower": "sensor.heatpump_power",
+    "hpState": "switch.heatpump",
+    "weather": "weather.forecast_home"
+  },
+  "prediction": {
+    "target": 28,
+    "volume": 16000,
+    "flow": 25,
+    "surface": 15,
+    "loss": 15,
+    "solarEff": 0.8,
+    "copCurve": [
+      {
+        "outdoor": 15,
+        "cop": 3.4
+      },
+      {
+        "outdoor": 28,
+        "cop": 4.2
+      }
+    ]
+  },
+  "polling": {
+    "enabled": false,
+    "intervalMs": 30000
+  },
+  "calibration": {
+    "enabled": true,
+    "learned": [
+      {
+        "outdoor": 15,
+        "cop": 3.9
+      },
+      {
+        "outdoor": 28,
+        "cop": 4.5
+      }
+    ],
+    "sampleCount": 12,
+    "lastMeasuredCop": 4.1,
+    "lastUpdated": "2026-06-25T07:00:22.441Z"
+  }
+}

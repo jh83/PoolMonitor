@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pool heater dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f3;
+      --surface: #ffffff;
+      --surface2: #f1efea;
+      --text: #1a1a18;
+      --text2: #5f5e5a;
+      --border: rgba(0,0,0,0.12);
+      --border2: rgba(0,0,0,0.2);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --blue: #378ADD;
+      --blue-dark: #185FA5;
+      --green: #639922;
+      --amber: #EF9F27;
+      --red: #E24B4A;
+      --gray: #888780;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --surface: #2a2a28;
+        --surface2: #232321;
+        --text: #e8e6e0;
+        --text2: #888780;
+        --border: rgba(255,255,255,0.1);
+        --border2: rgba(255,255,255,0.18);
+      }
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+
+    h1 { font-size: 20px; font-weight: 500; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px; }
+    h2 { font-size: 15px; font-weight: 500; color: var(--text2); margin-bottom: 0.75rem; }
+
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .divider {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text2);
+      border-bottom: 0.5px solid var(--border);
+      padding-bottom: 8px;
+      margin: 1rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 12px; color: var(--text2); }
+    .field input {
+      font-size: 13px;
+      padding: 7px 10px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md);
+      background: var(--surface2);
+      color: var(--text);
+      width: 100%;
+    }
+    .field input:focus { outline: none; border-color: var(--blue); }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 1rem; flex-wrap: wrap; align-items: center; }
+    button {
+      font-size: 13px;
+      padding: 7px 16px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+    }
+    button:hover { background: var(--surface2); }
+    button.primary { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
+    button.primary:hover { background: #0C447C; }
+
+    .status { font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-ok { background: var(--green); }
+    .dot-err { background: var(--red); }
+    .dot-idle { background: var(--gray); }
+    .err { font-size: 12px; color: var(--red); margin-top: 6px; }
+
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+    .metric { background: var(--surface2); border-radius: var(--radius-md); padding: 0.9rem 1rem; }
+    .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+    .metric-value { font-size: 22px; font-weight: 500; line-height: 1; }
+    .metric-unit { font-size: 13px; color: var(--text2); margin-left: 2px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 1rem; font-size: 12px; color: var(--text2); }
+    .legend button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 6px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+    }
+    .legend button:hover { background: var(--surface2); color: var(--text); }
+    .legend button.off { opacity: 0.45; }
+    .legend-swatch {
+      width: 20px;
+      height: 0;
+      border-top-width: 2px;
+      border-top-style: solid;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .legend-swatch.dashed { border-top-style: dashed; }
+    .legend-swatch.dotted { border-top-style: dotted; }
+
+    .chart-wrap { position: relative; width: 100%; height: 320px; }
+    .chart-hint { font-size: 11px; color: var(--text2); margin-left: auto; }
+
+    .prediction-box {
+      background: var(--surface2);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+    }
+    .prediction-card .prediction-box { background: transparent; padding: 0; }
+    .prediction-box .sub { font-size: 13px; color: var(--text2); }
+    .prediction-box .big { font-size: 28px; font-weight: 500; margin: 4px 0; line-height: 1.1; }
+    .prediction-box .detail { font-size: 13px; color: var(--text2); }
+
+    .net-breakdown { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.5rem; font-size: 12px; color: var(--text2); }
+    .net-breakdown span { background: var(--surface2); border-radius: var(--radius-md); padding: 3px 8px; }
+
+    .card-collapsible .card-header-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      color: inherit;
+      text-align: left;
+    }
+    .card-collapsible .card-header-toggle h2 { margin-bottom: 0; flex-shrink: 0; }
+    .card-collapsible .card-summary {
+      font-size: 12px;
+      color: var(--text2);
+      margin-left: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-collapsible .card-chevron {
+      color: var(--text2);
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .card-collapsible.expanded .card-chevron { transform: rotate(180deg); }
+    .card-collapsible:not(.expanded) .card-body { display: none; }
+    .card-collapsible:not(.expanded) .card-header-toggle { margin-bottom: 0; }
+    .card-collapsible.expanded .card-header-toggle { margin-bottom: 0.75rem; }
+    .card-collapsible .card-header-status { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .card-collapsible .err { margin-top: 0.5rem; }
+
+    .cop-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+    .cop-row .field { flex: 1; }
+    .cop-remove { flex-shrink: 0; padding: 7px 10px; color: var(--red); }
+    .cop-remove:hover { background: var(--surface2); }
+
+    .chart-day-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .chart-day-nav .chart-date-label {
+      font-size: 14px;
+      font-weight: 500;
+      min-width: 100px;
+      text-align: center;
+    }
+    .chart-day-nav button:disabled { opacity: 0.4; cursor: default; }
+
+    .lc-mode {
+      background: var(--surface2);
+      border-radius: var(--radius-md);
+      padding: 0.9rem 1rem;
+      margin-bottom: 10px;
+    }
+    .lc-mode h3 { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .lc-mode .lc-hint { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+    .lc-mode .btn-row { margin-top: 0.75rem; margin-bottom: 0; }
+  </style>
+</head>
+<body>
+
+<h1><i class="ti ti-pool"></i> Pool heater dashboard</h1>
+
+<!-- Config -->
+<div class="card card-collapsible" id="ha-card">
+  <button type="button" class="card-header-toggle" id="ha-card-toggle" aria-expanded="false" aria-controls="ha-card-body">
+    <h2>Home assistant connection</h2>
+    <span class="card-header-status" id="ha-card-status"><span class="dot dot-idle"></span><span>Not connected</span></span>
+    <span class="card-summary" id="ha-card-summary"></span>
+    <i class="ti ti-chevron-down card-chevron"></i>
+  </button>
+  <div class="card-body" id="ha-card-body">
+  <div class="grid-2">
+    <div class="field">
+      <label>HA base URL</label>
+      <input id="ha-url" value="http://homeassistant.local:8123" />
+    </div>
+    <div class="field">
+      <label>Long-lived access token</label>
+      <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Q..." />
+    </div>
+  </div>
+
+  <div class="divider">Entity IDs</div>
+  <div class="grid-2">
+    <div class="field"><label>Pool water temperature</label><input id="e-pool-temp" value="sensor.pool_water_temperature" /></div>
+    <div class="field"><label>HP outlet temp 1</label><input id="e-outlet1" value="sensor.heatpump_outlet_temp_1" /></div>
+    <div class="field"><label>HP outlet temp 2</label><input id="e-outlet2" value="sensor.heatpump_outlet_temp_2" /></div>
+    <div class="field"><label>Solar power (W)</label><input id="e-solar" value="sensor.solar_power" /></div>
+    <div class="field"><label>Outdoor temperature</label><input id="e-outdoor" value="sensor.outdoor_temperature" /></div>
+    <div class="field"><label>Heat pump power (W)</label><input id="e-hp-power" value="sensor.heatpump_power" /></div>
+    <div class="field"><label>Heat pump on/off</label><input id="e-hp-state" value="switch.heatpump" /></div>
+    <div class="field"><label>Weather forecast entity</label><input id="e-weather" value="weather.forecast_home" /></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="primary" onclick="startPolling()"><i class="ti ti-refresh"></i> Connect &amp; start polling</button>
+    <button onclick="stopPolling()"><i class="ti ti-player-pause"></i> Stop</button>
+  </div>
+  </div>
+  <div class="err" id="err-msg"></div>
+</div>
+
+<!-- Live metrics -->
+<div class="metrics">
+  <div class="metric"><div class="metric-label"><i class="ti ti-droplet" style="font-size:14px"></i> Pool temp</div><div class="metric-value" id="mv-pool">—<span class="metric-unit">°C</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-arrow-up-right" style="font-size:14px"></i> Outlet 1</div><div class="metric-value" id="mv-out1">—<span class="metric-unit">°C</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-arrow-up-right" style="font-size:14px"></i> Outlet 2</div><div class="metric-value" id="mv-out2">—<span class="metric-unit">°C</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-sun" style="font-size:14px"></i> Solar</div><div class="metric-value" id="mv-solar">—<span class="metric-unit">W</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-brightness-up" style="font-size:14px"></i> Sun activity</div><div class="metric-value" id="mv-sun-activity">—</div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-cloud" style="font-size:14px"></i> Outdoor</div><div class="metric-value" id="mv-outdoor">—<span class="metric-unit">°C</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-bolt" style="font-size:14px"></i> HP power</div><div class="metric-value" id="mv-hp-power">—<span class="metric-unit">W</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-power" style="font-size:14px"></i> HP state</div><div class="metric-value" id="mv-hp-state" style="font-size:16px;margin-top:4px">—</div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-flame" style="font-size:14px"></i> Net heating</div><div class="metric-value" id="mv-net">—<span class="metric-unit">kW</span></div></div>
+  <div class="metric"><div class="metric-label"><i class="ti ti-gauge" style="font-size:14px"></i> Measured COP</div><div class="metric-value" id="mv-cop">—</div></div>
+</div>
+
+<!-- Prediction summary -->
+<div class="card prediction-card">
+  <div class="prediction-box">
+    <div class="sub">Estimated arrival at target</div>
+    <div class="big" id="pred-time">—</div>
+    <div class="detail" id="pred-detail">Connect to Home Assistant to start prediction</div>
+    <div class="net-breakdown" id="net-breakdown"></div>
+  </div>
+</div>
+
+<!-- Chart -->
+<div class="card">
+  <div class="chart-day-nav">
+    <button id="chart-prev" onclick="shiftChartDate(-1)" title="Previous day"><i class="ti ti-chevron-left"></i></button>
+    <span class="chart-date-label" id="chart-date-label">Today</span>
+    <button id="chart-next" onclick="shiftChartDate(1)" title="Next day"><i class="ti ti-chevron-right"></i></button>
+    <button id="chart-today" onclick="goToToday()"><i class="ti ti-calendar-event"></i> Today</button>
+    <button id="chart-reset-zoom" onclick="resetChartZoom()" style="display:none"><i class="ti ti-zoom-reset"></i> Reset zoom</button>
+    <span class="chart-hint">Scroll to zoom · Shift+drag to pan</span>
+  </div>
+  <div class="legend" id="chart-legend"></div>
+  <div class="chart-wrap">
+    <canvas id="poolChart" role="img" aria-label="Pool temperature over time showing actual, predicted and target temperatures with air temperature and solar overlay"></canvas>
+  </div>
+</div>
+
+<!-- Prediction -->
+<div class="card">
+  <h2>Prediction &amp; parameters</h2>
+  <div class="grid-3">
+    <div class="field"><label>Target temperature (°C)</label><input id="p-target" type="number" value="28" /></div>
+    <div class="field"><label>Pool volume (liters)</label><input id="p-volume" type="number" value="16000" /></div>
+    <div class="field"><label>Flow rate (L/min)</label><input id="p-flow" type="number" value="25" /></div>
+    <div class="field"><label>Pool surface area (m²)</label><input id="p-surface" type="number" value="15" /></div>
+    <div class="field"><label>Loss coefficient (W/m²·°C)</label><input id="p-loss" type="number" step="0.5" value="15" /></div>
+    <div class="field"><label>Solar efficiency (0–1)</label><input id="p-solar-eff" type="number" step="0.05" value="0.8" /></div>
+    <div class="field"><label>Solar panel rated power (W)</label><input id="p-solar-rated" type="number" step="10" value="170" /></div>
+  </div>
+
+  <div class="divider">Loss coefficient calibration (cooldown test)</div>
+  <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
+    Measures how fast the pool cools with the heat pump off and no sun, then back-solves the loss
+    coefficient. Requires background polling. Auto-aborts if the heat pump turns on or solar is detected.
+  </p>
+
+  <div class="lc-mode">
+    <h3>Run now</h3>
+    <p class="lc-hint">Starts immediately and runs for the duration you set. Make sure the heat pump is off first.</p>
+    <div class="grid-3">
+      <div class="field"><label>Duration (minutes)</label><input id="lc-duration" type="number" step="30" value="180" /></div>
+    </div>
+    <div class="btn-row">
+      <button onclick="startLossCalibration()"><i class="ti ti-player-play"></i> Start cooldown test now</button>
+    </div>
+  </div>
+
+  <div class="lc-mode">
+    <h3>Schedule for tonight</h3>
+    <p class="lc-hint">Waits until the window starts, then measures until the window ends. Duration above is not used — the end time stops the test.</p>
+    <div class="grid-3">
+      <div class="field"><label>Window start</label><input id="lc-start" type="time" value="01:00" /></div>
+      <div class="field"><label>Window end</label><input id="lc-end" type="time" value="05:00" /></div>
+    </div>
+    <div class="btn-row">
+      <button onclick="armLossCalibration()"><i class="ti ti-clock"></i> Arm nightly test</button>
+    </div>
+  </div>
+
+  <div class="btn-row lc-actions">
+    <button id="lc-cancel" onclick="cancelLossCalibration()" style="display:none"><i class="ti ti-x"></i> Cancel cooldown test</button>
+    <button id="lc-revert" onclick="revertLossCalibration()" style="display:none"><i class="ti ti-restore"></i> Revert loss coefficient</button>
+  </div>
+  <div class="detail" id="loss-cal-status" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+
+  <div class="divider">Heat pump COP (datasheet baseline)</div>
+  <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
+    Add the COP values from your heat pump manual. Each row is one air temperature point;
+    values are interpolated by outdoor air temperature.
+  </p>
+  <div id="cop-rows"></div>
+  <div class="btn-row" style="margin-top:0">
+    <button type="button" onclick="addCopRow()"><i class="ti ti-plus"></i> Add COP point</button>
+  </div>
+
+  <div class="btn-row" style="justify-content:space-between">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="p-autocal" /> Auto-calibrate COP from live measurements
+    </label>
+    <button onclick="resetCalibration()"><i class="ti ti-restore"></i> Reset learned curve</button>
+  </div>
+  <div class="detail" id="cop-cal-status" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+
+  <div class="btn-row">
+    <button onclick="recalcPrediction()"><i class="ti ti-calculator"></i> Recalculate</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
+<script>
+  const zoomPlugin = globalThis['chartjs-plugin-zoom']?.default ?? globalThis['chartjs-plugin-zoom'];
+  if (zoomPlugin) Chart.register(zoomPlugin);
+  const CHART_MAX_DISPLAY = 500;
+  const UI_REFRESH_MS = 5000;
+  const RETENTION_DAYS = 30;
+
+  let chart = null;
+  let historyPoints = [];
+  let lastForecast = null;
+  let selectedDate = '';
+  let availableDates = [];
+  let saveTimer = null;
+  let uiTimer = null;
+  let chartZoomDay = null;
+  let chartIsZoomed = false;
+
+  function todayDateStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function dateFromOffset(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function isViewingToday() {
+    return selectedDate === todayDateStr();
+  }
+
+  function downsamplePoints(points, max = CHART_MAX_DISPLAY) {
+    if (points.length <= max) return points;
+    const step = Math.ceil(points.length / max);
+    const result = [];
+    for (let i = 0; i < points.length; i += step) result.push(points[i]);
+    const last = points[points.length - 1];
+    if (result[result.length - 1] !== last) result.push(last);
+    return result;
+  }
+
+  async function refreshAvailableDates() {
+    try {
+      const data = await api('/api/history/dates');
+      availableDates = data.dates || [];
+    } catch {
+      availableDates = [];
+    }
+    updateDayNavButtons();
+  }
+
+  function updateDayNavButtons() {
+    const today = todayDateStr();
+    const minDate = dateFromOffset(-RETENTION_DAYS);
+    $('chart-date-label').textContent = selectedDate === today ? 'Today' : selectedDate;
+    $('chart-prev').disabled = selectedDate <= minDate;
+    $('chart-next').disabled = selectedDate >= today;
+    $('chart-today').disabled = selectedDate === today;
+  }
+
+  async function navigateToDate(date) {
+    selectedDate = date;
+    lastChartPollAt = null;
+    updateDayNavButtons();
+    if (isViewingToday()) {
+      const status = await api('/api/status');
+      await loadHistoryIntoChart(status.prediction?.curve, status.forecast);
+    } else {
+      await loadHistoryIntoChart(null, null);
+    }
+  }
+
+  async function shiftChartDate(delta) {
+    const d = new Date(`${selectedDate}T12:00:00`);
+    d.setDate(d.getDate() + delta);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (next > todayDateStr() || next < dateFromOffset(-RETENTION_DAYS)) return;
+    await navigateToDate(next);
+  }
+
+  async function goToToday() {
+    await navigateToDate(todayDateStr());
+  }
+
+  const $ = id => document.getElementById(id);
+  const num = id => parseFloat($(id).value) || 0;
+  const fmt = (v, d = 1) => v == null || isNaN(v) ? '—' : (+v).toFixed(d);
+  const fmtTemp = v => fmt(v, 2);
+
+  const FIELD_IDS = [
+    'ha-url', 'ha-token',
+    'e-pool-temp', 'e-outlet1', 'e-outlet2', 'e-solar', 'e-outdoor', 'e-hp-power', 'e-hp-state', 'e-weather',
+    'p-target', 'p-volume', 'p-flow', 'p-surface', 'p-loss', 'p-solar-eff', 'p-solar-rated',
+  ];
+
+  const DEFAULT_COP_CURVE = [
+    { outdoor: 15, cop: 3.4 },
+    { outdoor: 28, cop: 4.2 },
+  ];
+
+  function readCopCurveFromForm() {
+    return [...$('cop-rows').querySelectorAll('.cop-row')]
+      .map(row => ({
+        outdoor: parseFloat(row.querySelector('.cop-air').value),
+        cop: parseFloat(row.querySelector('.cop-val').value),
+      }))
+      .filter(p => isFinite(p.outdoor) && isFinite(p.cop))
+      .sort((a, b) => a.outdoor - b.outdoor);
+  }
+
+  function addCopRow(outdoor = '', cop = '') {
+    const row = document.createElement('div');
+    row.className = 'cop-row';
+    row.innerHTML =
+      '<div class="field"><label>Air temp (°C)</label><input type="number" step="0.5" class="cop-air" /></div>' +
+      '<div class="field"><label>COP</label><input type="number" step="0.1" class="cop-val" /></div>' +
+      '<button type="button" class="cop-remove" title="Remove"><i class="ti ti-trash"></i></button>';
+    row.querySelector('.cop-air').value = outdoor;
+    row.querySelector('.cop-val').value = cop;
+    row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', scheduleSave));
+    row.querySelector('.cop-remove').addEventListener('click', () => {
+      row.remove();
+      scheduleSave();
+    });
+    $('cop-rows').appendChild(row);
+  }
+
+  function renderCopRows(curve) {
+    $('cop-rows').innerHTML = '';
+    const rows = curve?.length ? curve : DEFAULT_COP_CURVE;
+    rows.forEach(p => addCopRow(p.outdoor, p.cop));
+  }
+
+  function readSettingsFromForm() {
+    return {
+      haUrl: $('ha-url').value.trim(),
+      haToken: $('ha-token').value.trim(),
+      entities: {
+        poolTemp: $('e-pool-temp').value.trim(),
+        outlet1: $('e-outlet1').value.trim(),
+        outlet2: $('e-outlet2').value.trim(),
+        solar: $('e-solar').value.trim(),
+        outdoor: $('e-outdoor').value.trim(),
+        hpPower: $('e-hp-power').value.trim(),
+        hpState: $('e-hp-state').value.trim(),
+        weather: $('e-weather').value.trim(),
+      },
+      prediction: {
+        target: num('p-target'),
+        volume: num('p-volume'),
+        flow: num('p-flow'),
+        surface: num('p-surface'),
+        loss: num('p-loss'),
+        solarEff: num('p-solar-eff'),
+        solarRatedW: num('p-solar-rated'),
+        copCurve: readCopCurveFromForm(),
+      },
+      calibration: { enabled: $('p-autocal').checked },
+    };
+  }
+
+  function applySettings(settings) {
+    $('ha-url').value = settings.haUrl || '';
+    $('ha-token').value = settings.haToken || '';
+    $('e-pool-temp').value = settings.entities?.poolTemp || '';
+    $('e-outlet1').value = settings.entities?.outlet1 || '';
+    $('e-outlet2').value = settings.entities?.outlet2 || '';
+    $('e-solar').value = settings.entities?.solar || '';
+    $('e-outdoor').value = settings.entities?.outdoor || '';
+    $('e-hp-power').value = settings.entities?.hpPower || '';
+    $('e-hp-state').value = settings.entities?.hpState || '';
+    $('e-weather').value = settings.entities?.weather || '';
+    $('p-target').value = settings.prediction?.target ?? 28;
+    $('p-volume').value = settings.prediction?.volume ?? 16000;
+    $('p-flow').value = settings.prediction?.flow ?? 25;
+    $('p-surface').value = settings.prediction?.surface ?? 15;
+    $('p-loss').value = settings.prediction?.loss ?? 15;
+    $('p-solar-eff').value = settings.prediction?.solarEff ?? 0.8;
+    $('p-solar-rated').value = settings.prediction?.solarRatedW ?? 170;
+    renderCopRows(settings.prediction?.copCurve);
+    $('p-autocal').checked = settings.calibration?.enabled ?? true;
+    renderCalibrationStatus(settings.calibration);
+    if (settings.lossCal) {
+      $('lc-duration').value = settings.lossCal.durationMin ?? 180;
+      $('lc-start').value = settings.lossCal.schedule?.start ?? '01:00';
+      $('lc-end').value = settings.lossCal.schedule?.end ?? '05:00';
+    }
+    updateHaCardSummary(settings);
+  }
+
+  function renderCalibrationStatus(cal) {
+    const el = $('cop-cal-status');
+    if (!cal) { el.textContent = ''; return; }
+    if (!cal.enabled) {
+      el.textContent = 'Auto-calibration off — using datasheet COP values.';
+      return;
+    }
+    const curve = cal.effective || cal.learned;
+    if (!curve?.length || !cal.sampleCount) {
+      el.textContent = 'Learning… no valid samples yet (needs pump on, heating, with a clear ΔT).';
+      return;
+    }
+    const parts = curve.map(p => `${p.outdoor}°C → ${(+p.cop).toFixed(2)}`).join(' · ');
+    const measured = cal.lastMeasuredCop != null ? ` · last measured ${(+cal.lastMeasuredCop).toFixed(2)}` : '';
+    el.textContent = `Learned: ${parts} · ${cal.sampleCount} samples${measured}`;
+  }
+
+  function haHost(url) {
+    try { return new URL(url).host; } catch { return url || 'not configured'; }
+  }
+
+  function setHaCardCollapsed(collapsed) {
+    const card = $('ha-card');
+    const toggle = $('ha-card-toggle');
+    card.classList.toggle('expanded', !collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    localStorage.setItem('ha-card-collapsed', String(collapsed));
+  }
+
+  function updateHaCardSummary(settings) {
+    const host = haHost(settings?.haUrl || $('ha-url').value);
+    const configured = !!(settings?.haToken || $('ha-token').value.trim());
+    $('ha-card-summary').textContent = configured ? host : 'Not configured';
+  }
+
+  function updateHaCardStatus(polling) {
+    const el = $('ha-card-status');
+    if (polling?.enabled) {
+      if (polling.lastError) {
+        el.innerHTML = '<span class="dot dot-err"></span><span>Error</span>';
+      } else if (polling.lastPollAt) {
+        const when = new Date(polling.lastPollAt).toLocaleTimeString();
+        el.innerHTML = `<span class="dot dot-ok"></span><span>Polling · ${when}</span>`;
+      } else {
+        el.innerHTML = '<span class="dot dot-idle"></span><span>Polling…</span>';
+      }
+    } else {
+      el.innerHTML = '<span class="dot dot-idle"></span><span>Stopped</span>';
+    }
+  }
+
+  function initHaCard(settings, polling) {
+    const configured = !!(settings.haToken && settings.haUrl);
+    const saved = localStorage.getItem('ha-card-collapsed');
+    setHaCardCollapsed(saved !== null ? saved === 'true' : configured);
+    updateHaCardSummary(settings);
+    updateHaCardStatus(polling);
+    $('ha-card-toggle').addEventListener('click', () => {
+      setHaCardCollapsed($('ha-card').classList.contains('expanded'));
+    });
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  function scheduleSave() {
+    updateHaCardSummary();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        await api('/api/settings', { method: 'PUT', body: JSON.stringify(readSettingsFromForm()) });
+      } catch (_) {}
+    }, 500);
+  }
+
+  function bindAutoSave() {
+    FIELD_IDS.forEach(id => $(id).addEventListener('input', scheduleSave));
+    $('p-autocal').addEventListener('change', scheduleSave);
+  }
+
+  async function resetCalibration() {
+    try {
+      await applyStatus(await api('/api/calibration/reset', { method: 'POST' }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function startLossCalibration() {
+    try {
+      await applyStatus(await api('/api/loss-calibration/start', {
+        method: 'POST',
+        body: JSON.stringify({ durationMin: num('lc-duration') }),
+      }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function armLossCalibration() {
+    try {
+      await applyStatus(await api('/api/loss-calibration/schedule', {
+        method: 'POST',
+        body: JSON.stringify({ start: $('lc-start').value, end: $('lc-end').value }),
+      }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function cancelLossCalibration() {
+    try {
+      await applyStatus(await api('/api/loss-calibration/cancel', { method: 'POST' }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function revertLossCalibration() {
+    try {
+      await applyStatus(await api('/api/loss-calibration/revert', { method: 'POST' }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  function renderLossCalStatus(lc) {
+    const el = $('loss-cal-status');
+    const revertBtn = $('lc-revert');
+    const cancelBtn = $('lc-cancel');
+    if (!lc) {
+      el.textContent = '';
+      revertBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+      return;
+    }
+
+    revertBtn.style.display = lc.previousLoss != null ? '' : 'none';
+    cancelBtn.style.display = lc.status === 'running' || lc.status === 'armed' ? '' : 'none';
+
+    if (lc.status === 'running') {
+      const elapsed = lc.startedAt ? Math.round((Date.now() - new Date(lc.startedAt)) / 60000) : 0;
+      if (lc.mode === 'immediate') {
+        el.textContent = `Running now · ${elapsed} / ${lc.durationMin} min · drop ${(+lc.currentDrop).toFixed(2)}°C · ${lc.sampleCount} samples`;
+      } else {
+        el.textContent = `Running nightly · ${elapsed} min · until ${lc.schedule?.end} · drop ${(+lc.currentDrop).toFixed(2)}°C · ${lc.sampleCount} samples`;
+      }
+    } else if (lc.status === 'armed') {
+      el.textContent = `Armed for tonight · will run from ${lc.schedule?.start} to ${lc.schedule?.end} (polling must stay on, heat pump off).`;
+    } else if (lc.status === 'completed' && lc.lastResult?.valid) {
+      const r = lc.lastResult;
+      el.textContent = `Completed: loss ${(+lc.previousLoss).toFixed(2)} → ${(+r.loss).toFixed(2)} W/m²·°C · cooled ${r.drop}°C over ${r.durationMin} min (${r.samplesUsed} samples).`;
+    } else if (lc.status === 'aborted') {
+      el.textContent = `Aborted: ${lc.abortReason || 'unknown reason'}.`;
+    } else {
+      el.textContent = '';
+    }
+  }
+
+  const CHART_LEGEND = [
+    { datasetIndex: 0, label: 'Actual water temp', color: '#378ADD', style: 'solid' },
+    { datasetIndex: 1, label: 'Predicted now', color: '#E24B4A', style: 'dashed' },
+    { datasetIndex: 2, label: 'Initial prediction', color: '#C47A7A', style: 'dotted' },
+    { datasetIndex: 3, label: 'Target', color: '#639922', style: 'dashed' },
+    { datasetIndex: 4, label: 'Measured air temp', color: '#5C7A94', style: 'solid' },
+    { datasetIndex: 5, label: 'Forecast air temp', color: '#C8A8E8', style: 'dashed' },
+    { datasetIndex: 6, label: 'Solar (W)', color: '#EF9F27', style: 'solid' },
+  ];
+
+  function initChartLegend() {
+    const el = $('chart-legend');
+    el.innerHTML = CHART_LEGEND.map((item) =>
+      `<button type="button" data-dataset="${item.datasetIndex}" aria-pressed="true">` +
+      `<span class="legend-swatch ${item.style}" style="border-top-color:${item.color}"></span>` +
+      `${item.label}</button>`,
+    ).join('');
+    el.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => toggleChartDataset(+btn.dataset.dataset));
+    });
+    syncChartLegend();
+  }
+
+  function syncChartLegend() {
+    if (!chart) return;
+    $('chart-legend').querySelectorAll('button').forEach((btn) => {
+      const idx = +btn.dataset.dataset;
+      const hidden = chart.getDatasetMeta(idx).hidden;
+      btn.classList.toggle('off', hidden);
+      btn.setAttribute('aria-pressed', String(!hidden));
+    });
+  }
+
+  function toggleChartDataset(datasetIndex) {
+    if (!chart) return;
+    const visible = chart.isDatasetVisible(datasetIndex);
+    chart.setDatasetVisibility(datasetIndex, !visible);
+    chart.update('none');
+    syncChartLegend();
+  }
+
+  function dayBoundsMs(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return {
+      start: new Date(y, m - 1, d, 0, 0, 0, 0).getTime(),
+      end: new Date(y, m - 1, d, 23, 59, 59, 999).getTime(),
+    };
+  }
+
+  function buildHistorySeries(points, yFn, bounds) {
+    return points
+      .map((p) => {
+        const x = new Date(p.ts).getTime();
+        if (x < bounds.start || x > bounds.end) return null;
+        const y = yFn(p);
+        return y == null || isNaN(y) ? null : { x, y };
+      })
+      .filter(Boolean);
+  }
+
+  function buildConstantLine(y, bounds) {
+    return [{ x: bounds.start, y }, { x: bounds.end, y }];
+  }
+
+  function buildPredictedNowData(points, nowMs, currentPredCurve, bounds, viewingToday) {
+    if (!viewingToday || !currentPredCurve?.length || !points.length) return [];
+    const last = points[points.length - 1];
+    const lastX = new Date(last.ts).getTime();
+    const lastY = +parseFloat(last.poolTemp).toFixed(2);
+    if (lastX < bounds.start || lastX > bounds.end) return [];
+
+    const data = [{ x: lastX, y: lastY }];
+    for (const p of currentPredCurve) {
+      const x = nowMs + p.t * 60000;
+      if (x > lastX && x >= bounds.start && x <= bounds.end) {
+        data.push({ x, y: p.temp });
+      }
+    }
+    return data;
+  }
+
+  function buildInitialPredData(sessionStart, bounds) {
+    if (!sessionStart?.predCurve?.length) return [];
+    const anchorMs = new Date(sessionStart.ts).getTime();
+    const data = [];
+    const add = (x, y) => {
+      if (x >= bounds.start && x <= bounds.end && y != null) data.push({ x, y });
+    };
+    add(anchorMs, sessionStart.poolTemp);
+    for (const p of sessionStart.predCurve) {
+      add(anchorMs + p.t * 60000, p.temp);
+    }
+    return data.sort((a, b) => a.x - b.x);
+  }
+
+  function effectiveForecast(forecast) {
+    return forecast?.length ? forecast : lastForecast;
+  }
+
+  function buildForecastAirData(forecast, bounds, nowMs, viewingToday) {
+    if (!viewingToday || !forecast?.length) return [];
+
+    const byIndex = forecast
+      .map((fc, i) => {
+        const temp = fc.temperature ?? fc.native_temperature;
+        if (temp == null || isNaN(+temp)) return null;
+        const x = nowMs + i * 3600000;
+        if (x > bounds.end) return null;
+        return { x, y: +parseFloat(temp) };
+      })
+      .filter(Boolean);
+
+    const byDatetime = forecast
+      .map((fc) => {
+        const temp = fc.temperature ?? fc.native_temperature;
+        if (temp == null || isNaN(+temp) || !fc.datetime) return null;
+        const x = new Date(fc.datetime).getTime();
+        if (isNaN(x) || x < bounds.start || x > bounds.end) return null;
+        return { x, y: +parseFloat(temp) };
+      })
+      .filter(Boolean);
+
+    const data = byDatetime.length > byIndex.length ? byDatetime : byIndex;
+    return data.sort((a, b) => a.x - b.x);
+  }
+
+  const CHART_DATASET_DEFAULTS = { parsing: false };
+
+  function updateChartZoomLimits(bounds) {
+    if (!chart) return;
+    chart.options.plugins.zoom.limits = {
+      x: {
+        min: bounds.start,
+        max: bounds.end,
+        minRange: 15 * 60 * 1000,
+      },
+    };
+  }
+
+  function markChartZoomed() {
+    chartIsZoomed = true;
+    $('chart-reset-zoom').style.display = '';
+  }
+
+  function isXAxisZoomed(bounds) {
+    if (!chart?.scales?.x) return chartIsZoomed;
+    const span = bounds.end - bounds.start;
+    const view = chart.scales.x.max - chart.scales.x.min;
+    return view < span * 0.99;
+  }
+
+  function captureChartXRange(bounds, dayChanged) {
+    if (dayChanged || !chart?.scales?.x) {
+      return { min: bounds.start, max: bounds.end, zoomed: false };
+    }
+    const { min, max } = chart.scales.x;
+    const zoomed = isXAxisZoomed(bounds);
+    if (zoomed) {
+      chartIsZoomed = true;
+      $('chart-reset-zoom').style.display = '';
+      return { min, max, zoomed: true };
+    }
+    chartIsZoomed = false;
+    $('chart-reset-zoom').style.display = 'none';
+    return { min: bounds.start, max: bounds.end, zoomed: false };
+  }
+
+  function resetChartZoom() {
+    if (!chart) return;
+    const bounds = dayBoundsMs(selectedDate || todayDateStr());
+    chart.options.scales.x.min = bounds.start;
+    chart.options.scales.x.max = bounds.end;
+    chartIsZoomed = false;
+    $('chart-reset-zoom').style.display = 'none';
+    chart.update('none');
+  }
+
+  function initChart() {
+    if (chart) chart.destroy();
+    chartIsZoomed = false;
+    chartZoomDay = null;
+    $('chart-reset-zoom').style.display = 'none';
+    const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    const tickColor = isDark ? '#888780' : '#5f5e5a';
+
+    chart = new Chart($('poolChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Actual water (°C)', data: [], borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y', fill: true, order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Predicted now (°C)', data: [], borderColor: '#E24B4A', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Initial prediction (°C)', data: [], borderColor: '#C47A7A', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Target (°C)', data: [], borderColor: '#639922', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Measured air (°C)', data: [], borderColor: '#5C7A94', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Forecast air (°C)', data: [], borderColor: '#C8A8E8', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.2, yAxisID: 'y', order: 0, spanGaps: true, ...CHART_DATASET_DEFAULTS },
+          { label: 'Solar (W)', data: [], borderColor: '#EF9F27', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y2', fill: false, order: 1, ...CHART_DATASET_DEFAULTS }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        elements: { point: { radius: 0, hoverRadius: 4 } },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                const x = items[0]?.parsed?.x ?? items[0]?.raw?.x;
+                return x != null ? timeLabel(new Date(x)) : '';
+              },
+              label: (ctx) => {
+                const isSolar = ctx.dataset.yAxisID === 'y2';
+                const u = isSolar ? ' W' : ' °C';
+                const decimals = isSolar ? 0 : 2;
+                const y = ctx.parsed?.y ?? ctx.raw?.y;
+                return ` ${ctx.dataset.label}: ${y != null && !isNaN(y) ? (+y).toFixed(decimals) + u : '—'}`;
+              },
+            },
+          },
+          zoom: {
+            pan: {
+              enabled: true,
+              mode: 'x',
+              modifierKey: 'shift',
+            },
+            zoom: {
+              wheel: { enabled: true, speed: 0.08 },
+              pinch: { enabled: true },
+              drag: {
+                enabled: true,
+                borderColor: 'rgba(55,138,221,0.5)',
+                borderWidth: 1,
+                backgroundColor: 'rgba(55,138,221,0.1)',
+              },
+              mode: 'x',
+            },
+            onZoomComplete: () => markChartZoomed(),
+            onPanComplete: () => markChartZoomed(),
+          },
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            ticks: {
+              color: tickColor,
+              font: { size: 11 },
+              maxTicksLimit: 13,
+              callback: (v) => timeLabel(new Date(v)),
+            },
+            grid: { color: gridColor },
+          },
+          y: { title: { display: true, text: 'Temperature (°C)', color: tickColor, font: { size: 11 } }, ticks: { color: tickColor, font: { size: 11 }, callback: v => (+v).toFixed(2) }, grid: { color: gridColor } },
+          y2: { position: 'right', title: { display: true, text: 'Solar (W)', color: tickColor, font: { size: 11 } }, ticks: { color: tickColor, font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+    initChartLegend();
+  }
+
+  function timeLabel(date) {
+    return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+  }
+
+  function updatePredictionUI(minutes, poolTemp, powers, target) {
+    target = target ?? num('p-target');
+
+    if (poolTemp >= target) {
+      $('pred-time').textContent = 'Already at target!';
+      $('pred-detail').textContent = `Pool is ${fmtTemp(poolTemp)}°C — target ${fmtTemp(target)}°C reached`;
+    } else if (minutes == null) {
+      $('pred-time').textContent = '> 24 hours';
+      $('pred-detail').textContent = 'Cannot reach target within 24h with current settings';
+    } else {
+      const arrival = new Date(Date.now() + minutes * 60000);
+      const hrs = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      $('pred-time').textContent = timeLabel(arrival);
+      $('pred-detail').textContent = `${hrs}h ${mins}min from now · targeting ${fmtTemp(target)}°C`;
+    }
+
+    if (powers) {
+      const copLabel = powers.cop != null ? ` (COP ${powers.cop.toFixed(1)})` : '';
+      const utilLabel = powers.solarUtil != null
+        ? ` (${Math.round(powers.solarUtil * 100)}% sun)`
+        : '';
+      $('net-breakdown').innerHTML =
+        `<span>HP heat: ${(powers.hpHeat / 1000).toFixed(2)} kW${copLabel}</span>` +
+        `<span>Solar: ${(powers.solar / 1000).toFixed(2)} kW${utilLabel}</span>` +
+        `<span>Loss: ${(powers.loss / 1000).toFixed(2)} kW</span>` +
+        `<span>Net: ${(powers.net / 1000).toFixed(2)} kW</span>`;
+    }
+  }
+
+  let lastChartPollAt = null;
+
+  function renderChart(currentPredCurve, forecast) {
+    const target = num('p-target');
+    const nowMs = Date.now();
+    const viewingToday = isViewingToday();
+    const sessionStart = historyPoints.find((p) => p.sessionStart && p.predCurve?.length);
+    const bounds = dayBoundsMs(selectedDate || todayDateStr());
+    const fc = effectiveForecast(forecast);
+    const dayKey = selectedDate || todayDateStr();
+    const dayChanged = chartZoomDay !== dayKey;
+    chartZoomDay = dayKey;
+    updateChartZoomLimits(bounds);
+    const xRange = captureChartXRange(bounds, dayChanged);
+    chart.data.labels = [];
+    chart.data.datasets[0].data = buildHistorySeries(
+      historyPoints,
+      (p) => +parseFloat(p.poolTemp).toFixed(2),
+      bounds,
+    );
+    chart.data.datasets[1].data = buildPredictedNowData(
+      historyPoints, nowMs, currentPredCurve, bounds, viewingToday,
+    );
+    chart.data.datasets[2].data = buildInitialPredData(sessionStart, bounds);
+    chart.data.datasets[3].data = buildConstantLine(target, bounds);
+    chart.data.datasets[4].data = buildHistorySeries(
+      historyPoints,
+      (p) => (p.outdoor != null ? +parseFloat(p.outdoor).toFixed(2) : null),
+      bounds,
+    );
+    chart.data.datasets[5].data = buildForecastAirData(fc, bounds, nowMs, viewingToday);
+    chart.data.datasets[6].data = buildHistorySeries(
+      historyPoints,
+      (p) => +parseFloat(p.solar || 0).toFixed(0),
+      bounds,
+    );
+    chart.setDatasetVisibility(5, true);
+    delete chart.options.scales.y.min;
+    delete chart.options.scales.y.max;
+    delete chart.options.scales.y2.min;
+    delete chart.options.scales.y2.max;
+    chart.options.scales.x.min = xRange.min;
+    chart.options.scales.x.max = xRange.max;
+    chart.update('none');
+    syncChartLegend();
+  }
+
+  async function applyStatus(status) {
+    const errEl = $('err-msg');
+    const polling = status.polling;
+    const state = status.state;
+
+    updateHaCardStatus(polling);
+
+    if (polling.enabled) {
+      if (polling.lastError) {
+        errEl.textContent = polling.lastError;
+      } else {
+        errEl.textContent = '';
+      }
+    } else {
+      errEl.textContent = polling.lastError || '';
+    }
+
+    if (!state) return;
+
+    $('mv-pool').innerHTML = fmtTemp(state.poolTemp) + '<span class="metric-unit">°C</span>';
+    $('mv-out1').innerHTML = fmtTemp(state.outlet1) + '<span class="metric-unit">°C</span>';
+    $('mv-out2').innerHTML = fmtTemp(state.outlet2) + '<span class="metric-unit">°C</span>';
+    $('mv-solar').innerHTML = fmt(state.solar, 0) + '<span class="metric-unit">W</span>';
+    if (status.powers?.solarUtil != null) {
+      $('mv-sun-activity').innerHTML = Math.round(status.powers.solarUtil * 100) + '<span class="metric-unit">%</span>';
+    } else {
+      $('mv-sun-activity').textContent = '—';
+    }
+    $('mv-outdoor').innerHTML = fmtTemp(state.outdoor) + '<span class="metric-unit">°C</span>';
+    $('mv-hp-power').innerHTML = fmt(state.hpPower, 0) + '<span class="metric-unit">W</span>';
+    $('mv-hp-state').innerHTML = state.hpState === 'on'
+      ? '<span style="color:#639922">● On</span>'
+      : '<span style="color:#888780">○ Off</span>';
+
+    if (status.powers) {
+      $('mv-net').innerHTML = fmt(status.powers.net / 1000, 2) + '<span class="metric-unit">kW</span>';
+    }
+
+    $('mv-cop').textContent = status.measuredCop != null ? (+status.measuredCop).toFixed(2) : '—';
+    renderCalibrationStatus(status.calibration);
+    renderLossCalStatus(status.lossCal);
+
+    if (status.lossCal && document.activeElement !== $('p-loss')) {
+      const lv = status.lossCal.currentLoss;
+      if (lv != null && $('p-loss').value !== String(lv)) $('p-loss').value = lv;
+    }
+
+    const pred = status.prediction;
+    if (pred) {
+      updatePredictionUI(pred.minutes, state.poolTemp, status.powers);
+      if (isViewingToday()) {
+        if (status.forecast?.length) lastForecast = status.forecast;
+        if (polling.lastPollAt !== lastChartPollAt) {
+          lastChartPollAt = polling.lastPollAt;
+          await loadHistoryIntoChart(pred.curve, status.forecast);
+          await refreshAvailableDates();
+        } else {
+          renderChart(pred.curve, status.forecast);
+        }
+      }
+    }
+  }
+
+  async function loadHistoryIntoChart(currentPredCurve, forecast) {
+    const history = await api(`/api/history?date=${selectedDate}`);
+    historyPoints = downsamplePoints(history.points || []);
+    renderChart(
+      isViewingToday() ? currentPredCurve : null,
+      isViewingToday() ? effectiveForecast(forecast) : null,
+    );
+  }
+
+  async function refreshStatus() {
+    try {
+      await applyStatus(await api('/api/status'));
+    } catch (e) {
+      $('ha-card-status').innerHTML = '<span class="dot dot-err"></span><span>Server unreachable</span>';
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function recalcPrediction() {
+    try {
+      const status = await api('/api/recalculate', {
+        method: 'POST',
+        body: JSON.stringify({ prediction: readSettingsFromForm().prediction }),
+      });
+      await applyStatus(status);
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function startPolling() {
+    try {
+      const settings = readSettingsFromForm();
+      lastChartPollAt = null;
+      selectedDate = todayDateStr();
+      updateDayNavButtons();
+      initChart();
+      historyPoints = [];
+      lastForecast = null;
+      const status = await api('/api/polling/start', {
+        method: 'POST',
+        body: JSON.stringify(settings),
+      });
+      await applyStatus(status);
+    } catch (e) {
+      $('ha-card-status').innerHTML = '<span class="dot dot-err"></span><span>Error</span>';
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function stopPolling() {
+    try {
+      await applyStatus(await api('/api/polling/stop', { method: 'POST' }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+    }
+  }
+
+  async function boot() {
+    initChart();
+    bindAutoSave();
+    selectedDate = todayDateStr();
+    try {
+      const settings = await api('/api/settings');
+      applySettings(settings);
+      await refreshAvailableDates();
+      const status = await api('/api/status');
+      initHaCard(settings, status.polling);
+      await loadHistoryIntoChart(status.prediction?.curve, status.forecast);
+      await applyStatus(status);
+    } catch (e) {
+      $('err-msg').textContent = 'Could not load saved settings: ' + e.message;
+    }
+    uiTimer = setInterval(refreshStatus, UI_REFRESH_MS);
+  }
+
+  boot();
+</script>
+</body>
+</html>

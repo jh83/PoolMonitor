@@ -1,0 +1,12 @@
+services:
+  pool-dashboard:
+    build: .
+    container_name: pool-dashboard
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - pool-dashboard-data:/data
+
+volumes:
+  pool-dashboard-data:
