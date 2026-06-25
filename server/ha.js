@@ -1,3 +1,5 @@
+import { isPollVerbose, pollVerbose } from './log.js';
+
 export async function haGet(config, entity) {
   const url = config.haUrl.replace(/\/$/, '');
   const res = await fetch(`${url}/api/states/${entity}`, {
@@ -7,7 +9,16 @@ export async function haGet(config, entity) {
     },
   });
   if (!res.ok) throw new Error(`${entity} → HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (isPollVerbose()) {
+    pollVerbose(`HA GET ${entity}`, {
+      state: data.state,
+      last_changed: data.last_changed,
+      unit: data.attributes?.unit_of_measurement,
+      friendly_name: data.attributes?.friendly_name,
+    });
+  }
+  return data;
 }
 
 function normalizeForecast(raw) {
@@ -54,8 +65,12 @@ export async function haForecast(config, entity) {
         `${url}/api/services/weather/get_forecasts?return_response`,
         { method: 'POST', headers, body: JSON.stringify(body) },
       );
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (isPollVerbose()) pollVerbose(`HA forecast HTTP ${res.status}`, await res.text());
+        continue;
+      }
       const data = await res.json();
+      if (isPollVerbose()) pollVerbose('HA forecast response', data);
       const normalized = normalizeForecast(extractForecastFromResponse(data, entity));
       if (normalized) return normalized;
     } catch {

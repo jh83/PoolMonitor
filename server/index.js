@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchPoolState } from './ha.js';
+import { pollError, pollLog, pollVerbose } from './log.js';
 import {
   buildPrediction,
   calcNetPower,
@@ -13,8 +14,10 @@ import {
 import {
   appendHistoryPoint,
   getAvailableDates,
+  getForecastSnapshotsForDate,
   getHistoryForDate,
   loadConfig,
+  maybeAppendForecastSnapshot,
   saveConfig,
   saveHistory,
   toDateStr,
@@ -257,14 +260,37 @@ async function runPoll() {
       solar: state.solar,
       outdoor: state.outdoor,
     };
+    const forceForecastSnapshot = sessionPending;
     if (sessionPending) {
       point.sessionStart = true;
       point.predCurve = prediction.curve;
       sessionPending = false;
     }
     appendHistoryPoint(point);
+    if (nextForecast?.length) {
+      maybeAppendForecastSnapshot(runtime.lastPollAt, nextForecast, forceForecastSnapshot);
+    }
+
+    const fcCount = nextForecast?.length ?? 0;
+    const predMin = prediction.minutes != null ? `${Math.round(prediction.minutes)}min` : '>24h';
+    pollLog(
+      `OK pool=${state.poolTemp}°C outdoor=${state.outdoor}°C solar=${state.solar}W ` +
+      `hp=${state.hpState}(${state.hpPower}W) forecast=${fcCount}pts pred=${predMin} ` +
+      `net=${(powers.net / 1000).toFixed(2)}kW` +
+      (measured ? ` cop=${measured.cop.toFixed(1)}` : ''),
+    );
+    pollVerbose('parsed state', state);
+    if (nextForecast?.length) {
+      pollVerbose('forecast', {
+        count: nextForecast.length,
+        first: nextForecast[0],
+        last: nextForecast[nextForecast.length - 1],
+      });
+    }
   } catch (err) {
     runtime.lastError = err.message;
+    pollError(`FAIL ${err.message}`);
+    pollVerbose('error stack', err.stack);
   } finally {
     pollInFlight = false;
   }
@@ -275,6 +301,7 @@ function startPolling() {
   config.polling.enabled = true;
   sessionPending = true;
   saveConfig(config);
+  pollLog(`started (interval ${config.polling.intervalMs}ms)`);
   runPoll();
   pollTimer = setInterval(runPoll, config.polling.intervalMs);
 }
@@ -283,6 +310,7 @@ function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
+    pollLog('stopped');
   }
   config.polling.enabled = false;
   saveConfig(config);
@@ -307,7 +335,11 @@ app.get('/api/status', (_req, res) => {
 
 app.get('/api/history', (req, res) => {
   const date = req.query.date || toDateStr(new Date());
-  res.json({ points: getHistoryForDate(String(date)) });
+  const dateStr = String(date);
+  res.json({
+    points: getHistoryForDate(dateStr),
+    forecastSnapshots: getForecastSnapshotsForDate(dateStr),
+  });
 });
 
 app.get('/api/history/dates', (_req, res) => {
@@ -326,7 +358,7 @@ app.post('/api/polling/stop', (_req, res) => {
 });
 
 app.post('/api/history/clear', (_req, res) => {
-  saveHistory({ points: [] });
+  saveHistory({ points: [], forecastSnapshots: [] });
   res.json({ ok: true });
 });
 

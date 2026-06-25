@@ -381,12 +381,49 @@
 <script>
   const zoomPlugin = globalThis['chartjs-plugin-zoom']?.default ?? globalThis['chartjs-plugin-zoom'];
   if (zoomPlugin) Chart.register(zoomPlugin);
+
+  const CHART_HIDDEN_KEY = 'poolChartHidden';
+
+  function loadChartHiddenDatasets() {
+    try {
+      const raw = localStorage.getItem(CHART_HIDDEN_KEY);
+      if (!raw) return new Set();
+      return new Set(JSON.parse(raw).map(Number));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function persistChartHiddenDatasets() {
+    localStorage.setItem(CHART_HIDDEN_KEY, JSON.stringify([...chartHiddenDatasets]));
+  }
+
+  function applyHiddenStateOn(c) {
+    for (let i = 0; i < c.data.datasets.length; i++) {
+      const hidden = chartHiddenDatasets.has(i);
+      c.data.datasets[i].hidden = hidden;
+      const meta = c.getDatasetMeta(i);
+      if (meta) meta.hidden = hidden;
+    }
+  }
+
+  let visibilityPluginRegistered = false;
+  function ensureVisibilityPlugin() {
+    if (visibilityPluginRegistered) return;
+    Chart.register({
+      id: 'preserveVisibility',
+      beforeUpdate(c) { applyHiddenStateOn(c); },
+      afterUpdate(c) { applyHiddenStateOn(c); },
+    });
+    visibilityPluginRegistered = true;
+  }
   const CHART_MAX_DISPLAY = 500;
   const UI_REFRESH_MS = 5000;
   const RETENTION_DAYS = 30;
 
   let chart = null;
   let historyPoints = [];
+  let forecastSnapshots = [];
   let lastForecast = null;
   let selectedDate = '';
   let availableDates = [];
@@ -394,6 +431,7 @@
   let uiTimer = null;
   let chartZoomDay = null;
   let chartIsZoomed = false;
+  let chartHiddenDatasets = loadChartHiddenDatasets();
 
   function todayDateStr() {
     const d = new Date();
@@ -408,6 +446,30 @@
 
   function isViewingToday() {
     return selectedDate === todayDateStr();
+  }
+
+  function maxChartDateStr(forecast) {
+    let max = dateFromOffset(1);
+    const fc = forecast ?? lastForecast;
+    if (!fc?.length) return max;
+    for (const point of fc) {
+      if (!point.datetime) continue;
+      const d = new Date(point.datetime);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (ds > max) max = ds;
+    }
+    return max;
+  }
+
+  function isViewingForecastDay() {
+    const today = todayDateStr();
+    return selectedDate >= today && selectedDate <= maxChartDateStr();
+  }
+
+  function formatChartDateLabel(date) {
+    if (date === todayDateStr()) return 'Today';
+    if (date === dateFromOffset(1)) return 'Tomorrow';
+    return date;
   }
 
   function downsamplePoints(points, max = CHART_MAX_DISPLAY) {
@@ -433,9 +495,9 @@
   function updateDayNavButtons() {
     const today = todayDateStr();
     const minDate = dateFromOffset(-RETENTION_DAYS);
-    $('chart-date-label').textContent = selectedDate === today ? 'Today' : selectedDate;
+    $('chart-date-label').textContent = formatChartDateLabel(selectedDate);
     $('chart-prev').disabled = selectedDate <= minDate;
-    $('chart-next').disabled = selectedDate >= today;
+    $('chart-next').disabled = selectedDate >= maxChartDateStr();
     $('chart-today').disabled = selectedDate === today;
   }
 
@@ -443,9 +505,13 @@
     selectedDate = date;
     lastChartPollAt = null;
     updateDayNavButtons();
-    if (isViewingToday()) {
+    if (isViewingForecastDay()) {
       const status = await api('/api/status');
-      await loadHistoryIntoChart(status.prediction?.curve, status.forecast);
+      if (status.forecast?.length) lastForecast = status.forecast;
+      await loadHistoryIntoChart(
+        isViewingToday() ? status.prediction?.curve : null,
+        status.forecast,
+      );
     } else {
       await loadHistoryIntoChart(null, null);
     }
@@ -455,7 +521,7 @@
     const d = new Date(`${selectedDate}T12:00:00`);
     d.setDate(d.getDate() + delta);
     const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (next > todayDateStr() || next < dateFromOffset(-RETENTION_DAYS)) return;
+    if (next > maxChartDateStr() || next < dateFromOffset(-RETENTION_DAYS)) return;
     await navigateToDate(next);
   }
 
@@ -750,7 +816,7 @@
   function initChartLegend() {
     const el = $('chart-legend');
     el.innerHTML = CHART_LEGEND.map((item) =>
-      `<button type="button" data-dataset="${item.datasetIndex}" aria-pressed="true">` +
+      `<button type="button" data-dataset="${item.datasetIndex}" aria-pressed="${!chartHiddenDatasets.has(item.datasetIndex)}">` +
       `<span class="legend-swatch ${item.style}" style="border-top-color:${item.color}"></span>` +
       `${item.label}</button>`,
     ).join('');
@@ -764,7 +830,7 @@
     if (!chart) return;
     $('chart-legend').querySelectorAll('button').forEach((btn) => {
       const idx = +btn.dataset.dataset;
-      const hidden = chart.getDatasetMeta(idx).hidden;
+      const hidden = chartHiddenDatasets.has(idx);
       btn.classList.toggle('off', hidden);
       btn.setAttribute('aria-pressed', String(!hidden));
     });
@@ -772,10 +838,16 @@
 
   function toggleChartDataset(datasetIndex) {
     if (!chart) return;
-    const visible = chart.isDatasetVisible(datasetIndex);
-    chart.setDatasetVisibility(datasetIndex, !visible);
+    if (chartHiddenDatasets.has(datasetIndex)) chartHiddenDatasets.delete(datasetIndex);
+    else chartHiddenDatasets.add(datasetIndex);
+    persistChartHiddenDatasets();
+    applyHiddenStateOn(chart);
     chart.update('none');
     syncChartLegend();
+  }
+
+  function datasetHidden(index) {
+    return chartHiddenDatasets.has(index);
   }
 
   function dayBoundsMs(dateStr) {
@@ -836,31 +908,104 @@
     return forecast?.length ? forecast : lastForecast;
   }
 
-  function buildForecastAirData(forecast, bounds, nowMs, viewingToday) {
-    if (!viewingToday || !forecast?.length) return [];
+  function parseForecastTime(value) {
+    if (value == null) return NaN;
+    let t = new Date(value).getTime();
+    if (!isNaN(t)) return t;
+    t = new Date(String(value).replace(' ', 'T')).getTime();
+    return isNaN(t) ? NaN : t;
+  }
 
-    const byIndex = forecast
-      .map((fc, i) => {
-        const temp = fc.temperature ?? fc.native_temperature;
-        if (temp == null || isNaN(+temp)) return null;
-        const x = nowMs + i * 3600000;
-        if (x > bounds.end) return null;
-        return { x, y: +parseFloat(temp) };
-      })
-      .filter(Boolean);
+  function pickForecastCandidate(a, b, forecastX) {
+    const aBefore = a.snapMs <= forecastX;
+    const bBefore = b.snapMs <= forecastX;
+    if (aBefore && bBefore) return a.snapMs >= b.snapMs ? a : b;
+    if (aBefore) return a;
+    if (bBefore) return b;
+    return a.snapMs <= b.snapMs ? a : b;
+  }
 
-    const byDatetime = forecast
-      .map((fc) => {
-        const temp = fc.temperature ?? fc.native_temperature;
-        if (temp == null || isNaN(+temp) || !fc.datetime) return null;
-        const x = new Date(fc.datetime).getTime();
-        if (isNaN(x) || x < bounds.start || x > bounds.end) return null;
-        return { x, y: +parseFloat(temp) };
-      })
-      .filter(Boolean);
+  function buildArchivedForecastData(snapshots, bounds) {
+    if (!snapshots?.length) return [];
 
-    const data = byDatetime.length > byIndex.length ? byDatetime : byIndex;
-    return data.sort((a, b) => a.x - b.x);
+    const candidates = [];
+    for (const snap of snapshots) {
+      const snapMs = new Date(snap.ts).getTime();
+      for (const entry of snap.f || []) {
+        const datetime = entry[0];
+        const temperature = entry[1];
+        const x = parseForecastTime(datetime);
+        const y = +temperature;
+        if (isNaN(x) || isNaN(y) || x < bounds.start || x > bounds.end) continue;
+        candidates.push({ x, y, snapMs });
+      }
+    }
+
+    const byX = new Map();
+    for (const c of candidates) {
+      const prev = byX.get(c.x);
+      byX.set(c.x, prev ? pickForecastCandidate(prev, c, c.x) : c);
+    }
+
+    return [...byX.values()]
+      .map(({ x, y }) => ({ x, y }))
+      .sort((a, b) => a.x - b.x);
+  }
+
+  function buildChartForecastData(liveForecast, snapshots, bounds, nowMs, dateStr) {
+    const archived = buildArchivedForecastData(snapshots, bounds);
+    const today = todayDateStr();
+    const hasLive = dateStr >= today && liveForecast?.length;
+    const live = hasLive ? buildForecastAirData(liveForecast, bounds, nowMs, true) : [];
+
+    if (dateStr < today) return archived;
+    if (dateStr > today) return live.length ? live : archived;
+
+    const byX = new Map();
+    for (const p of archived) {
+      if (p.x < nowMs) byX.set(p.x, p.y);
+    }
+    for (const p of live) byX.set(p.x, p.y);
+    for (const p of archived) {
+      if (!byX.has(p.x)) byX.set(p.x, p.y);
+    }
+    return [...byX.entries()]
+      .map(([x, y]) => ({ x, y }))
+      .sort((a, b) => a.x - b.x);
+  }
+
+  function buildForecastAirData(forecast, bounds, nowMs, includeForecast) {
+    if (!includeForecast || !forecast?.length) return [];
+
+    const anchorIdx = forecast.findIndex(
+      (fc) => fc.datetime && !isNaN(parseForecastTime(fc.datetime)),
+    );
+    const anchorMs = anchorIdx >= 0 ? parseForecastTime(forecast[anchorIdx].datetime) : null;
+    const viewingToday = nowMs >= bounds.start && nowMs <= bounds.end;
+    const byX = new Map();
+
+    for (let i = 0; i < forecast.length; i++) {
+      const fc = forecast[i];
+      const temp = fc.temperature ?? fc.native_temperature;
+      if (temp == null || isNaN(+temp)) continue;
+
+      let x;
+      if (fc.datetime) {
+        x = parseForecastTime(fc.datetime);
+      } else if (anchorMs != null) {
+        x = anchorMs + (i - anchorIdx) * 3600000;
+      } else if (viewingToday) {
+        x = nowMs + i * 3600000;
+      } else {
+        x = bounds.start + i * 3600000;
+      }
+      if (isNaN(x) || x < bounds.start || x > bounds.end) continue;
+      byX.set(x, +parseFloat(temp));
+    }
+
+    return [...byX.entries()]
+      .map(([x, y]) => ({ x, y }))
+      .sort((a, b) => a.x - b.x);
   }
 
   const CHART_DATASET_DEFAULTS = { parsing: false };
@@ -916,6 +1061,7 @@
 
   function initChart() {
     if (chart) chart.destroy();
+    ensureVisibilityPlugin();
     chartIsZoomed = false;
     chartZoomDay = null;
     $('chart-reset-zoom').style.display = 'none';
@@ -928,13 +1074,13 @@
       data: {
         labels: [],
         datasets: [
-          { label: 'Actual water (°C)', data: [], borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y', fill: true, order: 2, ...CHART_DATASET_DEFAULTS },
-          { label: 'Predicted now (°C)', data: [], borderColor: '#E24B4A', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
-          { label: 'Initial prediction (°C)', data: [], borderColor: '#C47A7A', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
-          { label: 'Target (°C)', data: [], borderColor: '#639922', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
-          { label: 'Measured air (°C)', data: [], borderColor: '#5C7A94', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
-          { label: 'Forecast air (°C)', data: [], borderColor: '#C8A8E8', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.2, yAxisID: 'y', order: 0, spanGaps: true, ...CHART_DATASET_DEFAULTS },
-          { label: 'Solar (W)', data: [], borderColor: '#EF9F27', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y2', fill: false, order: 1, ...CHART_DATASET_DEFAULTS }
+          { label: 'Actual water (°C)', data: [], hidden: datasetHidden(0), borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y', fill: true, order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Predicted now (°C)', data: [], hidden: datasetHidden(1), borderColor: '#E24B4A', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Initial prediction (°C)', data: [], hidden: datasetHidden(2), borderColor: '#C47A7A', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Target (°C)', data: [], hidden: datasetHidden(3), borderColor: '#639922', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Measured air (°C)', data: [], hidden: datasetHidden(4), borderColor: '#5C7A94', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y', order: 2, ...CHART_DATASET_DEFAULTS },
+          { label: 'Forecast air (°C)', data: [], hidden: datasetHidden(5), borderColor: '#C8A8E8', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.2, yAxisID: 'y', order: 0, spanGaps: true, ...CHART_DATASET_DEFAULTS },
+          { label: 'Solar (W)', data: [], hidden: datasetHidden(6), borderColor: '#EF9F27', borderWidth: 1.5, pointRadius: 0, tension: 0.3, yAxisID: 'y2', fill: false, order: 1, ...CHART_DATASET_DEFAULTS }
         ]
       },
       options: {
@@ -998,6 +1144,7 @@
       }
     });
     initChartLegend();
+    applyHiddenStateOn(chart);
   }
 
   function timeLabel(date) {
@@ -1064,13 +1211,19 @@
       (p) => (p.outdoor != null ? +parseFloat(p.outdoor).toFixed(2) : null),
       bounds,
     );
-    chart.data.datasets[5].data = buildForecastAirData(fc, bounds, nowMs, viewingToday);
+    chart.data.datasets[5].data = buildChartForecastData(
+      fc,
+      forecastSnapshots,
+      bounds,
+      nowMs,
+      dayKey,
+    );
     chart.data.datasets[6].data = buildHistorySeries(
       historyPoints,
       (p) => +parseFloat(p.solar || 0).toFixed(0),
       bounds,
     );
-    chart.setDatasetVisibility(5, true);
+    applyHiddenStateOn(chart);
     delete chart.options.scales.y.min;
     delete chart.options.scales.y.max;
     delete chart.options.scales.y2.min;
@@ -1131,14 +1284,12 @@
     const pred = status.prediction;
     if (pred) {
       updatePredictionUI(pred.minutes, state.poolTemp, status.powers);
-      if (isViewingToday()) {
+      if (isViewingForecastDay() || forecastSnapshots.length) {
         if (status.forecast?.length) lastForecast = status.forecast;
         if (polling.lastPollAt !== lastChartPollAt) {
           lastChartPollAt = polling.lastPollAt;
           await loadHistoryIntoChart(pred.curve, status.forecast);
-          await refreshAvailableDates();
-        } else {
-          renderChart(pred.curve, status.forecast);
+          if (isViewingToday()) await refreshAvailableDates();
         }
       }
     }
@@ -1147,9 +1298,10 @@
   async function loadHistoryIntoChart(currentPredCurve, forecast) {
     const history = await api(`/api/history?date=${selectedDate}`);
     historyPoints = downsamplePoints(history.points || []);
+    forecastSnapshots = history.forecastSnapshots || [];
     renderChart(
       isViewingToday() ? currentPredCurve : null,
-      isViewingToday() ? effectiveForecast(forecast) : null,
+      isViewingForecastDay() ? effectiveForecast(forecast) : null,
     );
   }
 
@@ -1169,9 +1321,20 @@
         body: JSON.stringify({ prediction: readSettingsFromForm().prediction }),
       });
       await applyStatus(status);
+      refreshChartIfVisible(status);
     } catch (e) {
       $('err-msg').textContent = e.message;
     }
+  }
+
+  function refreshChartIfVisible(status) {
+    if (!chart || !status?.prediction) return;
+    if (!isViewingForecastDay() && !forecastSnapshots.length) return;
+    if (status.forecast?.length) lastForecast = status.forecast;
+    renderChart(
+      isViewingToday() ? status.prediction.curve : null,
+      status.forecast,
+    );
   }
 
   async function startPolling() {
@@ -1182,6 +1345,7 @@
       updateDayNavButtons();
       initChart();
       historyPoints = [];
+      forecastSnapshots = [];
       lastForecast = null;
       const status = await api('/api/polling/start', {
         method: 'POST',

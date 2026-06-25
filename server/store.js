@@ -108,6 +108,32 @@ function compactPoint(point) {
   return compact;
 }
 
+function compactForecast(forecast) {
+  if (!Array.isArray(forecast)) return [];
+  return forecast
+    .map((fc) => {
+      const d = fc.datetime ?? fc.time ?? fc.forecast_time;
+      const t = fc.temperature ?? fc.native_temperature ?? fc.temp;
+      if (!d || t == null || isNaN(+t)) return null;
+      return [d, +parseFloat(t)];
+    })
+    .filter(Boolean);
+}
+
+export function expandForecast(compact) {
+  if (!Array.isArray(compact)) return [];
+  return compact.map(([datetime, temperature]) => ({ datetime, temperature }));
+}
+
+function snapshotHourKey(ts) {
+  return new Date(ts).toISOString().slice(0, 13);
+}
+
+export function pruneForecastSnapshots(snapshots) {
+  const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  return snapshots.filter((s) => new Date(s.ts).getTime() >= cutoff);
+}
+
 function normalizePoints(points) {
   return pruneHistory(points).map((p) => {
     if (p.sessionStart) return p;
@@ -136,14 +162,18 @@ export function saveConfig(config) {
 }
 
 export function loadHistory() {
-  const history = readJson(HISTORY_PATH, { points: [] });
+  const history = readJson(HISTORY_PATH, { points: [], forecastSnapshots: [] });
   if (!Array.isArray(history.points)) history.points = [];
+  if (!Array.isArray(history.forecastSnapshots)) history.forecastSnapshots = [];
   history.points = normalizePoints(history.points);
+  history.forecastSnapshots = pruneForecastSnapshots(history.forecastSnapshots);
   return history;
 }
 
 export function saveHistory(history) {
   history.points = normalizePoints(history.points);
+  if (!Array.isArray(history.forecastSnapshots)) history.forecastSnapshots = [];
+  history.forecastSnapshots = pruneForecastSnapshots(history.forecastSnapshots);
   writeJson(HISTORY_PATH, history);
 }
 
@@ -153,6 +183,31 @@ export function appendHistoryPoint(point) {
   history.points = normalizePoints(history.points);
   saveHistory(history);
   return history;
+}
+
+export function maybeAppendForecastSnapshot(ts, forecast, force = false) {
+  const compact = compactForecast(forecast);
+  if (!compact.length) return;
+
+  const history = loadHistory();
+  const last = history.forecastSnapshots[history.forecastSnapshots.length - 1];
+  if (!force && last && snapshotHourKey(last.ts) === snapshotHourKey(ts)) return;
+
+  history.forecastSnapshots.push({ ts, f: compact });
+  history.forecastSnapshots = pruneForecastSnapshots(history.forecastSnapshots);
+  saveHistory(history);
+}
+
+export function getForecastSnapshotsForDate(dateStr) {
+  const { start, end } = dayBounds(dateStr);
+  const windowStart = new Date(start);
+  windowStart.setDate(windowStart.getDate() - 1);
+  const startMs = windowStart.getTime();
+  const endMs = end.getTime();
+  return loadHistory().forecastSnapshots.filter((s) => {
+    const t = new Date(s.ts).getTime();
+    return t >= startMs && t <= endMs;
+  });
 }
 
 export function getHistoryForDate(dateStr) {
