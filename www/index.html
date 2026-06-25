@@ -139,7 +139,7 @@
     .legend-swatch.dashed { border-top-style: dashed; }
     .legend-swatch.dotted { border-top-style: dotted; }
 
-    .chart-wrap { position: relative; width: 100%; height: 320px; }
+    .chart-wrap { position: relative; width: 100%; height: 440px; }
     .chart-hint { font-size: 11px; color: var(--text2); margin-left: auto; }
 
     .prediction-box {
@@ -224,46 +224,6 @@
 
 <h1><i class="ti ti-pool"></i> Pool heater dashboard</h1>
 
-<!-- Config -->
-<div class="card card-collapsible" id="ha-card">
-  <button type="button" class="card-header-toggle" id="ha-card-toggle" aria-expanded="false" aria-controls="ha-card-body">
-    <h2>Home assistant connection</h2>
-    <span class="card-header-status" id="ha-card-status"><span class="dot dot-idle"></span><span>Not connected</span></span>
-    <span class="card-summary" id="ha-card-summary"></span>
-    <i class="ti ti-chevron-down card-chevron"></i>
-  </button>
-  <div class="card-body" id="ha-card-body">
-  <div class="grid-2">
-    <div class="field">
-      <label>HA base URL</label>
-      <input id="ha-url" value="http://homeassistant.local:8123" />
-    </div>
-    <div class="field">
-      <label>Long-lived access token</label>
-      <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Q..." />
-    </div>
-  </div>
-
-  <div class="divider">Entity IDs</div>
-  <div class="grid-2">
-    <div class="field"><label>Pool water temperature</label><input id="e-pool-temp" value="sensor.pool_water_temperature" /></div>
-    <div class="field"><label>HP outlet temp 1</label><input id="e-outlet1" value="sensor.heatpump_outlet_temp_1" /></div>
-    <div class="field"><label>HP outlet temp 2</label><input id="e-outlet2" value="sensor.heatpump_outlet_temp_2" /></div>
-    <div class="field"><label>Solar power (W)</label><input id="e-solar" value="sensor.solar_power" /></div>
-    <div class="field"><label>Outdoor temperature</label><input id="e-outdoor" value="sensor.outdoor_temperature" /></div>
-    <div class="field"><label>Heat pump power (W)</label><input id="e-hp-power" value="sensor.heatpump_power" /></div>
-    <div class="field"><label>Heat pump on/off</label><input id="e-hp-state" value="switch.heatpump" /></div>
-    <div class="field"><label>Weather forecast entity</label><input id="e-weather" value="weather.forecast_home" /></div>
-  </div>
-
-  <div class="btn-row">
-    <button class="primary" onclick="startPolling()"><i class="ti ti-refresh"></i> Connect &amp; start polling</button>
-    <button onclick="stopPolling()"><i class="ti ti-player-pause"></i> Stop</button>
-  </div>
-  </div>
-  <div class="err" id="err-msg"></div>
-</div>
-
 <!-- Live metrics -->
 <div class="metrics">
   <div class="metric"><div class="metric-label"><i class="ti ti-droplet" style="font-size:14px"></i> Pool temp</div><div class="metric-value" id="mv-pool">—<span class="metric-unit">°C</span></div></div>
@@ -304,9 +264,54 @@
   </div>
 </div>
 
-<!-- Prediction -->
-<div class="card">
-  <h2>Prediction &amp; parameters</h2>
+<!-- Home Assistant connection -->
+<div class="card card-collapsible" id="ha-card">
+  <button type="button" class="card-header-toggle" id="ha-card-toggle" aria-expanded="false" aria-controls="ha-card-body">
+    <h2>Home assistant connection</h2>
+    <span class="card-header-status" id="ha-card-status"><span class="dot dot-idle"></span><span>Not connected</span></span>
+    <span class="card-summary" id="ha-card-summary"></span>
+    <i class="ti ti-chevron-down card-chevron"></i>
+  </button>
+  <div class="card-body" id="ha-card-body">
+  <div class="grid-2">
+    <div class="field">
+      <label>HA base URL</label>
+      <input id="ha-url" value="http://homeassistant.local:8123" />
+    </div>
+    <div class="field">
+      <label>Long-lived access token</label>
+      <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Q..." />
+    </div>
+  </div>
+
+  <div class="divider">Entity IDs</div>
+  <div class="grid-2">
+    <div class="field"><label>Pool water temperature</label><input id="e-pool-temp" value="sensor.pool_water_temperature" /></div>
+    <div class="field"><label>HP outlet temp 1</label><input id="e-outlet1" value="sensor.heatpump_outlet_temp_1" /></div>
+    <div class="field"><label>HP outlet temp 2</label><input id="e-outlet2" value="sensor.heatpump_outlet_temp_2" /></div>
+    <div class="field"><label>Solar power (W)</label><input id="e-solar" value="sensor.solar_power" /></div>
+    <div class="field"><label>Outdoor temperature</label><input id="e-outdoor" value="sensor.outdoor_temperature" /></div>
+    <div class="field"><label>Heat pump power (W)</label><input id="e-hp-power" value="sensor.heatpump_power" /></div>
+    <div class="field"><label>Heat pump on/off</label><input id="e-hp-state" value="switch.heatpump" /></div>
+    <div class="field"><label>Weather forecast entity</label><input id="e-weather" value="weather.forecast_home" /></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="primary" onclick="startPolling()"><i class="ti ti-refresh"></i> Connect &amp; start polling</button>
+    <button onclick="stopPolling()"><i class="ti ti-player-pause"></i> Stop</button>
+  </div>
+  </div>
+  <div class="err" id="err-msg"></div>
+</div>
+
+<!-- Prediction & parameters -->
+<div class="card card-collapsible" id="params-card">
+  <button type="button" class="card-header-toggle" id="params-card-toggle" aria-expanded="false" aria-controls="params-card-body">
+    <h2>Prediction &amp; parameters</h2>
+    <span class="card-summary" id="params-card-summary"></span>
+    <i class="ti ti-chevron-down card-chevron"></i>
+  </button>
+  <div class="card-body" id="params-card-body">
   <div class="grid-3">
     <div class="field"><label>Target temperature (°C)</label><input id="p-target" type="number" value="28" /></div>
     <div class="field"><label>Pool volume (liters)</label><input id="p-volume" type="number" value="16000" /></div>
@@ -372,6 +377,7 @@
 
   <div class="btn-row">
     <button onclick="recalcPrediction()"><i class="ti ti-calculator"></i> Recalculate</button>
+  </div>
   </div>
 </div>
 
@@ -633,6 +639,7 @@
       $('lc-end').value = settings.lossCal.schedule?.end ?? '05:00';
     }
     updateHaCardSummary(settings);
+    updateParamsCardSummary();
   }
 
   function renderCalibrationStatus(cal) {
@@ -694,6 +701,33 @@
     updateHaCardStatus(polling);
     $('ha-card-toggle').addEventListener('click', () => {
       setHaCardCollapsed($('ha-card').classList.contains('expanded'));
+    });
+  }
+
+  function setParamsCardCollapsed(collapsed) {
+    const card = $('params-card');
+    const toggle = $('params-card-toggle');
+    card.classList.toggle('expanded', !collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    localStorage.setItem('params-card-collapsed', String(collapsed));
+  }
+
+  function updateParamsCardSummary() {
+    const target = num('p-target');
+    const loss = num('p-loss');
+    $('params-card-summary').textContent =
+      `Target ${fmtTemp(target)}°C · loss ${loss} W/m²·°C`;
+  }
+
+  function initParamsCard() {
+    const saved = localStorage.getItem('params-card-collapsed');
+    setParamsCardCollapsed(saved !== null ? saved === 'true' : true);
+    updateParamsCardSummary();
+    $('params-card-toggle').addEventListener('click', () => {
+      setParamsCardCollapsed($('params-card').classList.contains('expanded'));
+    });
+    ['p-target', 'p-loss', 'p-volume'].forEach((id) => {
+      $(id).addEventListener('input', updateParamsCardSummary);
     });
   }
 
@@ -1368,6 +1402,7 @@
 
   async function boot() {
     initChart();
+    initParamsCard();
     bindAutoSave();
     selectedDate = todayDateStr();
     try {
