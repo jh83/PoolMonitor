@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchPoolState } from './ha.js';
+import { fetchPoolState, haGet, haSwitchSet } from './ha.js';
 import { pollError, pollLog, pollVerbose } from './log.js';
 import {
   buildHpSchedule,
@@ -11,6 +11,8 @@ import {
   computeLossCoefficient,
   measureCop,
   isSolarActive,
+  isHpHeatingAllowed,
+  effectiveHpMinTemp,
 } from './prediction.js';
 import {
   appendHistoryPoint,
@@ -42,6 +44,14 @@ let runtime = {
   prediction: null,
   measuredCop: null,
   hpSchedule: null,
+  hpAuto: {
+    lastOnDate: null,
+    lastOnStart: null,
+    lastOffDate: null,
+    lastAction: null,
+    lastActionAt: null,
+    lastError: null,
+  },
 };
 
 const app = express();
@@ -179,6 +189,97 @@ function computeHpSchedule(state, forecast) {
   return buildHpSchedule(pred, state, forecast, pred.schedule);
 }
 
+function defaultHpAuto() {
+  return {
+    lastOnDate: null,
+    lastOnStart: null,
+    lastOffDate: null,
+    lastAction: null,
+    lastActionAt: null,
+    lastError: null,
+  };
+}
+
+function resolveHpAutoWindow(hpSchedule, schedule, todayStr, now) {
+  const hpOffMin = parseHHMM(hpSchedule?.hpOffTime ?? schedule.hpOffTime);
+  const readyMin = parseHHMM(hpSchedule?.readyTime ?? schedule.readyTime) ?? 0;
+  const todayEntry = hpSchedule?.days?.find((d) => d.date === todayStr);
+  let windowStartMin = readyMin;
+  if (todayEntry?.hpStart) {
+    const startMin = parseHHMM(todayEntry.hpStart);
+    if (startMin != null) windowStartMin = startMin;
+  }
+  const nowMin = minutesOfDay(now);
+  return {
+    hpOffMin,
+    windowStartMin,
+    inWindow: hpOffMin != null && nowMin >= windowStartMin && nowMin < hpOffMin,
+    pastOffTime: hpOffMin != null && nowMin >= hpOffMin,
+  };
+}
+
+async function handleHpAutoControl(state, hpSchedule, now = new Date()) {
+  const schedule = config.prediction.schedule;
+  const prediction = config.prediction;
+  if (!schedule?.autoControl || !config.polling.enabled) return;
+  if (config.lossCal.status === 'running') return;
+  if (!config.entities.hpState?.trim()) return;
+
+  const poolTemp = state.poolTemp;
+  if (poolTemp == null || !isFinite(poolTemp)) return;
+
+  if (!runtime.hpAuto) runtime.hpAuto = defaultHpAuto();
+
+  const todayStr = toDateStr(now);
+  const { hpOffMin, inWindow, pastOffTime } = resolveHpAutoWindow(hpSchedule, schedule, todayStr, now);
+  if (hpOffMin == null) return;
+
+  const entity = config.entities.hpState.trim();
+  const hpOn = state.hpState === 'on';
+  const target = prediction.target;
+  const hpMin = effectiveHpMinTemp(prediction);
+
+  const recordAction = (action, detail) => {
+    runtime.hpAuto.lastAction = action;
+    runtime.hpAuto.lastActionAt = now.toISOString();
+    runtime.hpAuto.lastError = null;
+    if (action === 'off' && pastOffTime) runtime.hpAuto.lastOffDate = todayStr;
+    pollLog(`HP auto → ${action.toUpperCase()} (${entity})${detail ? ` — ${detail}` : ''}`);
+  };
+
+  try {
+    if (pastOffTime) {
+      if (hpOn) {
+        await haSwitchSet(config, entity, false);
+        recordAction('off', 'evening cutoff');
+      }
+      return;
+    }
+
+    if (!inWindow) return;
+
+    if (hpOn && !isHpHeatingAllowed(prediction, poolTemp)) {
+      await haSwitchSet(config, entity, false);
+      recordAction('off', `pool ${poolTemp.toFixed(1)}°C at HP max`);
+      return;
+    }
+
+    if (hpOn && target != null && isFinite(target) && poolTemp >= target) {
+      await haSwitchSet(config, entity, false);
+      recordAction('off', `pool ${poolTemp.toFixed(1)}°C >= target ${target}°C`);
+      return;
+    }
+
+    if (!hpOn && hpMin != null && poolTemp < hpMin) {
+      await haSwitchSet(config, entity, true);
+      recordAction('on', `pool ${poolTemp.toFixed(1)}°C < on threshold ${hpMin}°C`);
+    }
+  } catch (err) {
+    runtime.hpAuto.lastError = err.message;
+    pollError(`HP auto FAIL ${err.message}`);
+  }
+}
+
 function buildStatus() {
   return {
     polling: {
@@ -193,6 +294,10 @@ function buildStatus() {
     prediction: runtime.prediction,
     measuredCop: runtime.measuredCop,
     hpSchedule: runtime.hpSchedule,
+    hpAuto: {
+      enabled: !!config.prediction.schedule?.autoControl,
+      ...runtime.hpAuto,
+    },
     calibration: {
       enabled: config.calibration.enabled,
       sampleCount: config.calibration.sampleCount,
@@ -253,6 +358,8 @@ async function runPoll() {
     const prediction = buildPrediction(pred, state.poolTemp, state, forecast);
 
     const nextForecast = forecast?.length ? forecast : runtime.forecast;
+    const hpSchedule = computeHpSchedule(state, nextForecast);
+    const hpAuto = runtime.hpAuto ?? defaultHpAuto();
     runtime = {
       lastPollAt: new Date().toISOString(),
       lastError: null,
@@ -261,14 +368,24 @@ async function runPoll() {
       powers,
       prediction,
       measuredCop: measured ? +measured.cop.toFixed(2) : null,
-      hpSchedule: computeHpSchedule(state, nextForecast),
+      hpSchedule,
+      hpAuto,
     };
+
+    await handleHpAutoControl(state, hpSchedule);
 
     const point = {
       ts: runtime.lastPollAt,
       poolTemp: state.poolTemp,
+      outlet1: state.outlet1,
+      outlet2: state.outlet2,
       solar: state.solar,
       outdoor: state.outdoor,
+      hpPower: state.hpPower,
+      hpState: state.hpState === 'on' ? 1 : 0,
+      netKw: powers.net / 1000,
+      cop: measured ? +measured.cop.toFixed(2) : null,
+      solarUtil: powers.solarUtil,
     };
     const forceForecastSnapshot = sessionPending;
     if (sessionPending) {
@@ -368,6 +485,31 @@ app.post('/api/polling/start', (req, res) => {
 app.post('/api/polling/stop', (_req, res) => {
   stopPolling();
   res.json(buildStatus());
+});
+
+app.post('/api/hp/set', async (req, res) => {
+  if (!config.haToken?.trim()) {
+    res.status(400).json({ error: 'Home Assistant token is not configured' });
+    return;
+  }
+  const entity = config.entities.hpState?.trim();
+  if (!entity) {
+    res.status(400).json({ error: 'Heat pump entity is not configured' });
+    return;
+  }
+  const on = !!req.body?.on;
+  try {
+    await haSwitchSet(config, entity, on);
+    const hpStateS = await haGet(config, entity);
+    if (runtime.state) {
+      runtime.state.hpState = hpStateS.state;
+    }
+    pollLog(`HP manual → ${on ? 'ON' : 'OFF'} (${entity})`);
+    res.json(buildStatus());
+  } catch (err) {
+    pollError(`HP manual FAIL ${err.message}`);
+    res.status(502).json({ error: err.message });
+  }
 });
 
 app.post('/api/history/clear', (_req, res) => {

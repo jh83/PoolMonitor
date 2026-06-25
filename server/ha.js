@@ -21,6 +21,24 @@ export async function haGet(config, entity) {
   return data;
 }
 
+export async function haSwitchSet(config, entityId, on) {
+  const url = config.haUrl.replace(/\/$/, '');
+  const domain = entityId.includes('.') ? entityId.split('.')[0] : 'switch';
+  const service = on ? 'turn_on' : 'turn_off';
+  const res = await fetch(`${url}/api/services/${domain}/${service}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.haToken.trim()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ entity_id: entityId }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`${entityId} ${service} → HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+  }
+}
+
 function normalizeForecast(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const entries = raw

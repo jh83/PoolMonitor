@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG = {
   },
   prediction: {
     target: 28,
+    hpMinTemp: 26,
     hpMaxTemp: 32,
     volume: 16000,
     flow: 25,
@@ -28,6 +29,7 @@ export const DEFAULT_CONFIG = {
     loss: 15,
     solarEff: 0.8,
     solarRatedW: 170,
+    hpRatedKw: 1.5,
     copCurve: [
       { outdoor: 15, cop: 3.4 },
       { outdoor: 28, cop: 4.2 },
@@ -36,6 +38,7 @@ export const DEFAULT_CONFIG = {
       enabled: true,
       readyTime: '10:00',
       hpOffTime: '20:00',
+      autoControl: false,
     },
   },
   polling: {
@@ -107,6 +110,13 @@ function compactPoint(point) {
     solar: point.solar,
     outdoor: point.outdoor,
   };
+  if (point.outlet1 != null && isFinite(point.outlet1)) compact.outlet1 = point.outlet1;
+  if (point.outlet2 != null && isFinite(point.outlet2)) compact.outlet2 = point.outlet2;
+  if (point.hpPower != null && isFinite(point.hpPower)) compact.hpPower = point.hpPower;
+  if (point.hpState != null) compact.hpState = point.hpState;
+  if (point.netKw != null && isFinite(point.netKw)) compact.netKw = point.netKw;
+  if (point.cop != null && isFinite(point.cop)) compact.cop = point.cop;
+  if (point.solarUtil != null && isFinite(point.solarUtil)) compact.solarUtil = point.solarUtil;
   if (point.sessionStart) {
     compact.sessionStart = true;
     if (point.predCurve) compact.predCurve = point.predCurve;

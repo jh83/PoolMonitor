@@ -106,11 +106,55 @@
     .dot-idle { background: var(--gray); }
     .err { font-size: 12px; color: var(--red); margin-top: 6px; }
 
-    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
-    .metric { background: var(--surface2); border-radius: var(--radius-md); padding: 0.9rem 1rem; }
-    .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
-    .metric-value { font-size: 22px; font-weight: 500; line-height: 1; }
-    .metric-unit { font-size: 13px; color: var(--text2); margin-left: 2px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
+    .metric,
+    button.metric {
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0.65rem 0.85rem;
+      background: var(--surface2);
+      border-radius: var(--radius-md);
+      line-height: 1.2;
+    }
+    .metric-label {
+      font-size: 11px;
+      color: var(--text2);
+      margin: 0;
+      line-height: 1.2;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+    .metric-label i { font-size: 12px; line-height: 1; flex-shrink: 0; }
+    .metric-value {
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1;
+      flex-shrink: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      white-space: nowrap;
+    }
+    .metric-unit {
+      font-size: 0.52em;
+      font-weight: 400;
+      color: var(--text2);
+      line-height: 1;
+      position: relative;
+      top: 0;
+    }
+    .metric-status-on,
+    .metric-status-off {
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1;
+    }
 
     .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 1rem; font-size: 12px; color: var(--text2); }
     .legend button {
@@ -190,6 +234,7 @@
     .card-collapsible .err { margin-top: 0.5rem; }
 
     .cop-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+    .cop-row:last-child { margin-bottom: 0; }
     .cop-row .field { flex: 1; }
     .cop-remove { flex-shrink: 0; padding: 7px 10px; color: var(--red); }
     .cop-remove:hover { background: var(--surface2); }
@@ -210,14 +255,10 @@
     .chart-day-nav button:disabled { opacity: 0.4; cursor: default; }
 
     .lc-mode {
-      background: var(--surface2);
-      border-radius: var(--radius-md);
-      padding: 0.9rem 1rem;
       margin-bottom: 10px;
     }
-    .lc-mode h3 { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-    .lc-mode .lc-hint { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
     .lc-mode .btn-row { margin-top: 0.75rem; margin-bottom: 0; }
+    .lc-actions { margin-top: 10px; }
 
     .schedule-header {
       display: flex;
@@ -244,61 +285,399 @@
     .schedule-ok { color: var(--green); }
     .schedule-bad { color: var(--red); }
     .schedule-muted { color: var(--text2); font-size: 12px; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 10px;
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle-row:hover { border-color: var(--border2); }
+    .toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .toggle-text strong { font-size: 13px; font-weight: 500; color: var(--text); }
+    .toggle-hint { font-size: 12px; color: var(--text2); line-height: 1.35; }
+    .toggle-switch {
+      position: relative;
+      flex-shrink: 0;
+      width: 44px;
+      height: 24px;
+    }
+    .toggle-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .toggle-track {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: var(--border2);
+      border-radius: 999px;
+      transition: background 0.2s;
+    }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track {
+      background: var(--green);
+    }
+    .toggle-switch input:checked + .toggle-track::after {
+      transform: translateX(20px);
+    }
+    .toggle-switch input:focus-visible + .toggle-track {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+    .toggle-row.is-on {
+      border-color: rgba(99, 153, 34, 0.45);
+      background: rgba(99, 153, 34, 0.08);
+    }
+    .toggle-row.is-busy {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .hp-control-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 20px;
+      flex-wrap: wrap;
+      padding: 0.75rem 1rem;
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .hp-control-bar.is-on {
+      border-color: rgba(99, 153, 34, 0.45);
+      background: rgba(99, 153, 34, 0.08);
+    }
+    .hp-control-bar.is-busy {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .hp-control-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .hp-control-info strong { font-size: 13px; font-weight: 500; }
+    .hp-control-hint { font-size: 12px; color: var(--text2); line-height: 1.35; }
+    .hp-control-toggles {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .hp-toggle-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      user-select: none;
+    }
+    .hp-toggle-inline.is-disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 1rem;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 18px;
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .page-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text2);
+      padding-left: 12px;
+      margin-left: 4px;
+      border-left: 0.5px solid var(--border);
+      white-space: nowrap;
+    }
+    .page-header .err {
+      margin: 0;
+      flex-basis: 100%;
+    }
+    .page-header .err:empty { display: none; }
+    .page-header .icon-btn {
+      font-size: 12px;
+      padding: 5px 8px;
+      flex-shrink: 0;
+    }
+
+    .dashboard-glance {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .glance-layout {
+      display: grid;
+      grid-template-columns: 1fr minmax(220px, 320px);
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .glance-layout { grid-template-columns: 1fr; }
+    }
+    .metrics-primary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .metrics-secondary-label {
+      font-size: 11px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 4px 0 6px;
+    }
+    .metrics-secondary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 8px;
+    }
+    .metric-clickable {
+      border: 0.5px solid transparent;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      width: 100%;
+      transition: border-color 0.15s, background 0.15s;
+      /* override global button { align-items: center } */
+      align-items: baseline;
+    }
+    .metric-clickable:hover {
+      border-color: var(--border2);
+      background: var(--surface);
+    }
+    .metric-clickable:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+    .metric-status-on { color: var(--green); }
+    .metric-status-off { color: var(--gray); }
+    .glance-prediction {
+      background: var(--surface2);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      height: 100%;
+    }
+    .glance-prediction .big { font-size: 26px; }
+    .glance-prediction .net-breakdown span { background: var(--surface); }
+
+    .hp-card-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .hp-card-header h2 { margin-bottom: 0; color: var(--text2); }
+    #hp-card-summary { font-size: 12px; color: var(--text2); }
+    .hp-section { margin-bottom: 1.25rem; }
+    .hp-section:last-child { margin-bottom: 0; }
+
+    .settings-stack .card { margin-bottom: 1.25rem; }
+    .schedule-table-wrap { overflow-x: auto; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: rgba(0, 0, 0, 0.45);
+      overflow-y: auto;
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .modal {
+      width: min(720px, 100%);
+      max-height: calc(100vh - 4rem);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 1rem 1.25rem;
+      border-bottom: 0.5px solid var(--border);
+      flex-shrink: 0;
+    }
+    .modal-header h2 { margin: 0; font-size: 16px; color: var(--text); }
+    .modal-subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .modal-close {
+      padding: 6px 10px;
+      font-size: 18px;
+      line-height: 1;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      cursor: pointer;
+      border-radius: var(--radius-md);
+    }
+    .modal-close:hover { background: var(--surface2); color: var(--text); }
+    .modal-body {
+      padding: 1.25rem;
+      overflow-y: auto;
+    }
+    .settings-group {
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .settings-group:last-child { margin-bottom: 0; }
+    .settings-group-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0 0 4px;
+    }
+    .settings-group-desc {
+      font-size: 12px;
+      color: var(--text2);
+      margin: 0 0 12px;
+      line-height: 1.45;
+    }
+    .settings-subgroup {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1rem;
+      margin-bottom: 10px;
+    }
+    .settings-subgroup:last-child { margin-bottom: 0; }
+    .settings-subgroup-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 0 0 10px;
+    }
+    .settings-subgroup .btn-row { margin-top: 0.75rem; margin-bottom: 0; }
+    .settings-subgroup-hint {
+      font-size: 12px;
+      color: var(--text2);
+      margin: -4px 0 10px;
+      line-height: 1.4;
+    }
+    .settings-status {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+    .metric-chart-wrap {
+      position: relative;
+      height: 280px;
+      padding: 0 1.25rem 1.25rem;
+    }
+    .metric-chart-empty {
+      font-size: 13px;
+      color: var(--text2);
+      padding: 0 1.25rem 1.25rem;
+    }
   </style>
 </head>
 <body>
 
-<h1><i class="ti ti-pool"></i> Pool heater dashboard</h1>
-
-<!-- Live metrics -->
-<div class="metrics">
-  <div class="metric"><div class="metric-label"><i class="ti ti-droplet" style="font-size:14px"></i> Pool temp</div><div class="metric-value" id="mv-pool">—<span class="metric-unit">°C</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-arrow-up-right" style="font-size:14px"></i> Outlet 1</div><div class="metric-value" id="mv-out1">—<span class="metric-unit">°C</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-arrow-up-right" style="font-size:14px"></i> Outlet 2</div><div class="metric-value" id="mv-out2">—<span class="metric-unit">°C</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-sun" style="font-size:14px"></i> Solar</div><div class="metric-value" id="mv-solar">—<span class="metric-unit">W</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-brightness-up" style="font-size:14px"></i> Sun activity</div><div class="metric-value" id="mv-sun-activity">—</div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-cloud" style="font-size:14px"></i> Outdoor</div><div class="metric-value" id="mv-outdoor">—<span class="metric-unit">°C</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-bolt" style="font-size:14px"></i> HP power</div><div class="metric-value" id="mv-hp-power">—<span class="metric-unit">W</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-power" style="font-size:14px"></i> HP state</div><div class="metric-value" id="mv-hp-state" style="font-size:16px;margin-top:4px">—</div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-flame" style="font-size:14px"></i> Net heating</div><div class="metric-value" id="mv-net">—<span class="metric-unit">kW</span></div></div>
-  <div class="metric"><div class="metric-label"><i class="ti ti-gauge" style="font-size:14px"></i> Measured COP</div><div class="metric-value" id="mv-cop">—</div></div>
+<div class="page-header">
+  <h1>
+    <i class="ti ti-pool"></i>
+    <span>Pool heater dashboard</span>
+    <span class="page-status" id="ha-card-status"><span class="dot dot-idle"></span><span>Stopped</span></span>
+  </h1>
+  <button type="button" class="icon-btn" onclick="openSettingsModal()" title="Settings"><i class="ti ti-settings"></i></button>
+  <div class="err" id="err-msg"></div>
 </div>
 
-<!-- Prediction summary -->
-<div class="card prediction-card">
-  <div class="prediction-box">
-    <div class="sub">Estimated arrival at target</div>
-    <div class="big" id="pred-time">—</div>
-    <div class="detail" id="pred-detail">Connect to Home Assistant to start prediction</div>
-    <div class="net-breakdown" id="net-breakdown"></div>
-  </div>
-</div>
-
-<!-- Daily HP schedule -->
-<div class="card" id="hp-schedule-card">
-  <div class="schedule-header">
-    <h2>Daily heat pump schedule</h2>
-    <div class="schedule-times">
-      <div class="field">
-        <label>Ready by</label>
-        <input id="p-ready-time" type="time" value="10:00" />
+<!-- At-a-glance dashboard -->
+<div class="dashboard-glance">
+  <div class="glance-layout">
+    <div>
+      <div class="metrics metrics-primary">
+        <button type="button" class="metric metric-clickable" data-metric="pool"><div class="metric-label"><i class="ti ti-droplet"></i> Pool temp</div><div class="metric-value" id="mv-pool">—<span class="metric-unit">°C</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="hpState"><div class="metric-label"><i class="ti ti-power"></i> HP state</div><div class="metric-value" id="mv-hp-state">—</div></button>
+        <button type="button" class="metric metric-clickable" data-metric="hpPower"><div class="metric-label"><i class="ti ti-bolt"></i> HP power</div><div class="metric-value" id="mv-hp-power">—<span class="metric-unit">W</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="net"><div class="metric-label"><i class="ti ti-flame"></i> Net heating</div><div class="metric-value" id="mv-net">—<span class="metric-unit">kW</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="cop"><div class="metric-label"><i class="ti ti-gauge"></i> Measured COP</div><div class="metric-value" id="mv-cop">—</div></button>
       </div>
-      <div class="field">
-        <label>HP off (evening)</label>
-        <input id="p-hp-off-time" type="time" value="20:00" />
+      <div class="metrics-secondary-label">Sensors</div>
+      <div class="metrics metrics-secondary">
+        <button type="button" class="metric metric-clickable" data-metric="out1"><div class="metric-label"><i class="ti ti-arrow-up-right"></i> Outlet 1</div><div class="metric-value" id="mv-out1">—<span class="metric-unit">°C</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="out2"><div class="metric-label"><i class="ti ti-arrow-up-right"></i> Outlet 2</div><div class="metric-value" id="mv-out2">—<span class="metric-unit">°C</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="solar"><div class="metric-label"><i class="ti ti-sun"></i> Solar</div><div class="metric-value" id="mv-solar">—<span class="metric-unit">W</span></div></button>
+        <button type="button" class="metric metric-clickable" data-metric="sunActivity"><div class="metric-label"><i class="ti ti-brightness-up"></i> Sun activity</div><div class="metric-value" id="mv-sun-activity">—</div></button>
+        <button type="button" class="metric metric-clickable" data-metric="outdoor"><div class="metric-label"><i class="ti ti-cloud"></i> Outdoor</div><div class="metric-value" id="mv-outdoor">—<span class="metric-unit">°C</span></div></button>
       </div>
     </div>
+    <div class="prediction-box glance-prediction">
+      <div class="sub">Estimated arrival at target</div>
+      <div class="big" id="pred-time">—</div>
+      <div class="detail" id="pred-detail">Connect to Home Assistant to start prediction</div>
+      <div class="net-breakdown" id="net-breakdown"></div>
+    </div>
   </div>
-  <p class="detail" style="font-size:12px;color:var(--text2);margin:8px 0 10px">
-    Suggested HP start each day to reach target by <strong>Ready by</strong>. Assumes HP runs until
-    <strong>HP off</strong> (but not above your <strong>HP max</strong> setting), then cools overnight
-    using your loss coefficient and the air temperature forecast.
-  </p>
-  <div id="hp-schedule-body" class="schedule-muted">Start polling to generate the schedule</div>
 </div>
 
 <!-- Chart -->
-<div class="card">
+<div class="card" id="chart-card">
   <div class="chart-day-nav">
     <button id="chart-prev" onclick="shiftChartDate(-1)" title="Previous day"><i class="ti ti-chevron-left"></i></button>
     <span class="chart-date-label" id="chart-date-label">Today</span>
@@ -313,121 +692,240 @@
   </div>
 </div>
 
-<!-- Home Assistant connection -->
-<div class="card card-collapsible" id="ha-card">
-  <button type="button" class="card-header-toggle" id="ha-card-toggle" aria-expanded="false" aria-controls="ha-card-body">
-    <h2>Home assistant connection</h2>
-    <span class="card-header-status" id="ha-card-status"><span class="dot dot-idle"></span><span>Not connected</span></span>
-    <span class="card-summary" id="ha-card-summary"></span>
-    <i class="ti ti-chevron-down card-chevron"></i>
-  </button>
-  <div class="card-body" id="ha-card-body">
-  <div class="grid-2">
-    <div class="field">
-      <label>HA base URL</label>
-      <input id="ha-url" value="http://homeassistant.local:8123" />
+<!-- Heat pump operations -->
+<div class="card" id="hp-schedule-card">
+  <div class="hp-card-header">
+    <h2>Heat pump</h2>
+    <span id="hp-card-summary"></span>
+  </div>
+
+  <div class="hp-section">
+    <div class="divider" style="margin-top:0">Schedule</div>
+    <div class="schedule-times" style="margin-bottom:8px">
+      <div class="field" style="min-width:140px">
+        <label>Ready by</label>
+        <input id="p-ready-time" type="time" value="10:00" />
+      </div>
+      <div class="field" style="min-width:140px">
+        <label>HP off (evening)</label>
+        <input id="p-hp-off-time" type="time" value="20:00" />
+      </div>
     </div>
-    <div class="field">
-      <label>Long-lived access token</label>
-      <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Q..." />
+    <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      Suggested HP start each day to reach target by <strong>Ready by</strong>. Assumes HP runs until
+      <strong>HP off</strong> (but not above your <strong>HP off temperature</strong> setting), then cools overnight
+      using your loss coefficient and the air temperature forecast.
+    </p>
+    <div class="schedule-table-wrap">
+      <div id="hp-schedule-body" class="schedule-muted">Start polling to generate the schedule</div>
     </div>
   </div>
 
-  <div class="divider">Entity IDs</div>
-  <div class="grid-2">
-    <div class="field"><label>Pool water temperature</label><input id="e-pool-temp" value="sensor.pool_water_temperature" /></div>
-    <div class="field"><label>HP outlet temp 1</label><input id="e-outlet1" value="sensor.heatpump_outlet_temp_1" /></div>
-    <div class="field"><label>HP outlet temp 2</label><input id="e-outlet2" value="sensor.heatpump_outlet_temp_2" /></div>
-    <div class="field"><label>Solar power (W)</label><input id="e-solar" value="sensor.solar_power" /></div>
-    <div class="field"><label>Outdoor temperature</label><input id="e-outdoor" value="sensor.outdoor_temperature" /></div>
-    <div class="field"><label>Heat pump power (W)</label><input id="e-hp-power" value="sensor.heatpump_power" /></div>
-    <div class="field"><label>Heat pump on/off</label><input id="e-hp-state" value="switch.heatpump" /></div>
-    <div class="field"><label>Weather forecast entity</label><input id="e-weather" value="weather.forecast_home" /></div>
+  <div class="hp-section">
+    <div class="divider" style="margin-top:0">Control</div>
+    <div class="hp-control-bar" id="hp-control-bar">
+      <div class="hp-control-info">
+        <strong>Heat pump</strong>
+        <span class="hp-control-hint" id="hp-control-hint">Manual on/off via Home Assistant</span>
+      </div>
+      <div class="hp-control-toggles">
+        <label class="hp-toggle-inline" id="hp-manual-toggle-row" for="p-hp-manual">
+          <span>On</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="p-hp-manual" />
+            <span class="toggle-track" aria-hidden="true"></span>
+          </span>
+        </label>
+        <label class="hp-toggle-inline" id="hp-auto-toggle-row" for="p-hp-auto" title="Schedule and temperature thresholds">
+          <span>Auto</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="p-hp-auto" />
+            <span class="toggle-track" aria-hidden="true"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+    <div class="detail" id="hp-auto-status" style="font-size:12px;color:var(--text2);margin-top:8px"></div>
   </div>
 
-  <div class="btn-row">
-    <button class="primary" onclick="startPolling()"><i class="ti ti-refresh"></i> Connect &amp; start polling</button>
-    <button onclick="stopPolling()"><i class="ti ti-player-pause"></i> Stop</button>
+  <div class="hp-section">
+    <div class="divider" style="margin-top:0">Temperatures</div>
+    <div class="grid-3">
+      <div class="field"><label>Target temperature (°C)</label><input id="p-target" type="number" step="0.5" value="28" title="Auto control turns the heat pump off at or above this temperature" /></div>
+      <div class="field"><label>HP on/off temperature — on (°C)</label><input id="p-hp-min" type="number" step="0.5" value="26" title="Auto control turns the heat pump on when pool temperature drops below this" /></div>
+      <div class="field"><label>HP on/off temperature — off (°C)</label><input id="p-hp-max" type="number" step="0.5" value="32" title="Heating stops at or above this temperature (auto control and schedule simulation)" /></div>
+    </div>
   </div>
-  </div>
-  <div class="err" id="err-msg"></div>
 </div>
 
-<!-- Prediction & parameters -->
-<div class="card card-collapsible" id="params-card">
-  <button type="button" class="card-header-toggle" id="params-card-toggle" aria-expanded="false" aria-controls="params-card-body">
-    <h2>Prediction &amp; parameters</h2>
-    <span class="card-summary" id="params-card-summary"></span>
-    <i class="ti ti-chevron-down card-chevron"></i>
-  </button>
-  <div class="card-body" id="params-card-body">
-  <div class="grid-3">
-    <div class="field"><label>Target temperature (°C)</label><input id="p-target" type="number" value="28" /></div>
-    <div class="field"><label>HP max temperature (°C)</label><input id="p-hp-max" type="number" step="0.5" value="32" /></div>
-    <div class="field"><label>Pool volume (liters)</label><input id="p-volume" type="number" value="16000" /></div>
-    <div class="field"><label>Flow rate (L/min)</label><input id="p-flow" type="number" value="25" /></div>
-    <div class="field"><label>Pool surface area (m²)</label><input id="p-surface" type="number" value="15" /></div>
-    <div class="field"><label>Loss coefficient (W/m²·°C)</label><input id="p-loss" type="number" step="0.5" value="15" /></div>
-    <div class="field"><label>Solar efficiency (0–1)</label><input id="p-solar-eff" type="number" step="0.05" value="0.8" /></div>
-    <div class="field"><label>Solar panel rated power (W)</label><input id="p-solar-rated" type="number" step="10" value="170" /></div>
-  </div>
-
-  <div class="divider">Loss coefficient calibration (cooldown test)</div>
-  <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
-    Measures how fast the pool cools with the heat pump off and no sun, then back-solves the loss
-    coefficient. Requires background polling. Auto-aborts if the heat pump turns on or solar is detected.
-  </p>
-
-  <div class="lc-mode">
-    <h3>Run now</h3>
-    <p class="lc-hint">Starts immediately and runs for the duration you set. Make sure the heat pump is off first.</p>
-    <div class="grid-3">
-      <div class="field"><label>Duration (minutes)</label><input id="lc-duration" type="number" step="30" value="180" /></div>
+<!-- Metric chart modal -->
+<div class="modal-backdrop" id="metric-modal" hidden aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="metric-modal-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="metric-modal-title">Metric</h2>
+        <div class="modal-subtitle" id="metric-modal-subtitle">Today</div>
+      </div>
+      <button type="button" class="modal-close" onclick="closeMetricChart()" aria-label="Close"><i class="ti ti-x"></i></button>
     </div>
-    <div class="btn-row">
-      <button onclick="startLossCalibration()"><i class="ti ti-player-play"></i> Start cooldown test now</button>
+    <div class="metric-chart-wrap" id="metric-chart-wrap">
+      <canvas id="metricChart" role="img" aria-label="Today's history for selected metric"></canvas>
     </div>
+    <p class="metric-chart-empty" id="metric-chart-empty" style="display:none">No readings for today yet. Start polling to collect data.</p>
   </div>
+</div>
 
-  <div class="lc-mode">
-    <h3>Schedule for tonight</h3>
-    <p class="lc-hint">Waits until the window starts, then measures until the window ends. Duration above is not used — the end time stops the test.</p>
-    <div class="grid-3">
-      <div class="field"><label>Window start</label><input id="lc-start" type="time" value="01:00" /></div>
-      <div class="field"><label>Window end</label><input id="lc-end" type="time" value="05:00" /></div>
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settings-modal" hidden aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="settings-modal-title">Settings</h2>
+        <div class="modal-subtitle" id="ha-card-summary">Not configured</div>
+      </div>
+      <button type="button" class="modal-close" onclick="closeSettingsModal()" aria-label="Close"><i class="ti ti-x"></i></button>
     </div>
-    <div class="btn-row">
-      <button onclick="armLossCalibration()"><i class="ti ti-clock"></i> Arm nightly test</button>
+    <div class="modal-body">
+
+      <section class="settings-group" id="ha-card">
+        <h3 class="settings-group-title">Home Assistant</h3>
+        <p class="settings-group-desc">Connection details and entity IDs used when polling sensors from Home Assistant.</p>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Connection</h4>
+          <div class="grid-2">
+            <div class="field">
+              <label>HA base URL</label>
+              <input id="ha-url" value="http://homeassistant.local:8123" />
+            </div>
+            <div class="field">
+              <label>Long-lived access token</label>
+              <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Q..." />
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Entity IDs</h4>
+          <div class="grid-2">
+            <div class="field"><label>Pool water temperature</label><input id="e-pool-temp" value="sensor.pool_water_temperature" /></div>
+            <div class="field"><label>HP outlet temp 1</label><input id="e-outlet1" value="sensor.heatpump_outlet_temp_1" /></div>
+            <div class="field"><label>HP outlet temp 2</label><input id="e-outlet2" value="sensor.heatpump_outlet_temp_2" /></div>
+            <div class="field"><label>Outdoor temperature</label><input id="e-outdoor" value="sensor.outdoor_temperature" /></div>
+            <div class="field"><label>Solar power (W)</label><input id="e-solar" value="sensor.solar_power" /></div>
+            <div class="field"><label>Heat pump power (W)</label><input id="e-hp-power" value="sensor.heatpump_power" /></div>
+            <div class="field"><label>Heat pump on/off</label><input id="e-hp-state" value="switch.heatpump" /></div>
+            <div class="field"><label>Weather forecast entity</label><input id="e-weather" value="weather.forecast_home" /></div>
+          </div>
+        </div>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Data polling</h4>
+          <p class="settings-subgroup-hint">Start or stop background polling. Settings are saved automatically when you connect.</p>
+          <div class="btn-row settings-poll-actions">
+            <button type="button" class="primary" id="btn-connect" onclick="startPolling()"><i class="ti ti-refresh"></i> Connect &amp; start polling</button>
+            <button type="button" id="btn-stop" onclick="stopPolling()" hidden><i class="ti ti-player-pause"></i> Stop polling</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-group" id="pool-model-card">
+        <h3 class="settings-group-title">Pool &amp; solar model</h3>
+        <p class="settings-group-desc">Physical pool properties and solar assumptions used for temperature prediction and schedule estimates.</p>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Pool geometry</h4>
+          <div class="grid-3">
+            <div class="field"><label>Pool volume (liters)</label><input id="p-volume" type="number" value="16000" /></div>
+            <div class="field"><label>Flow rate (L/min)</label><input id="p-flow" type="number" value="25" /></div>
+            <div class="field"><label>Pool surface area (m²)</label><input id="p-surface" type="number" value="15" /></div>
+          </div>
+        </div>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Heat loss &amp; solar</h4>
+          <div class="grid-3">
+            <div class="field"><label>Loss coefficient (W/m²·°C)</label><input id="p-loss" type="number" step="0.5" value="15" /></div>
+            <div class="field"><label>Solar efficiency (0–1)</label><input id="p-solar-eff" type="number" step="0.05" value="0.8" /></div>
+            <div class="field"><label>Solar panel rated power (W)</label><input id="p-solar-rated" type="number" step="10" value="170" /></div>
+          </div>
+          <div class="btn-row">
+            <button onclick="recalcPrediction()"><i class="ti ti-calculator"></i> Recalculate prediction</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-group" id="hp-datasheet-card">
+        <h3 class="settings-group-title">Heat pump datasheet</h3>
+        <p class="settings-group-desc">Manufacturer COP data and electrical draw used for heating estimates and schedule kWh calculations.</p>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Electrical draw</h4>
+          <div class="grid-3">
+            <div class="field">
+              <label>Rated power (kW)</label>
+              <input id="p-hp-rated-kw" type="number" step="0.1" min="0" value="1.5" title="Datasheet or measured HP power draw — used for schedule kWh estimates" />
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">COP curve</h4>
+          <p class="settings-subgroup-hint">One row per outdoor air temperature from your manual. Values are interpolated during prediction.</p>
+          <div id="cop-rows"></div>
+          <div class="btn-row">
+            <button type="button" onclick="addCopRow()"><i class="ti ti-plus"></i> Add COP point</button>
+          </div>
+        </div>
+
+        <div class="settings-subgroup">
+          <h4 class="settings-subgroup-title">Live COP learning</h4>
+          <p class="settings-subgroup-hint">Optionally refine the curve from measured heating performance while polling.</p>
+          <div class="btn-row" style="justify-content:space-between">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" id="p-autocal" /> Auto-calibrate from live measurements
+            </label>
+            <button onclick="resetCalibration()"><i class="ti ti-restore"></i> Reset learned curve</button>
+          </div>
+          <div class="settings-status" id="cop-cal-status"></div>
+        </div>
+      </section>
+
+      <section class="settings-group" id="loss-cal-card">
+        <h3 class="settings-group-title">Loss coefficient calibration</h3>
+        <p class="settings-group-desc">Measures overnight cooldown to refine the loss coefficient. Requires polling; auto-aborts if the heat pump turns on or solar is detected.</p>
+
+        <div class="settings-subgroup lc-mode">
+          <h4 class="settings-subgroup-title">Run now</h4>
+          <p class="settings-subgroup-hint">Starts immediately. Make sure the heat pump is off first.</p>
+          <div class="grid-3">
+            <div class="field"><label>Duration (minutes)</label><input id="lc-duration" type="number" step="30" value="180" /></div>
+          </div>
+          <div class="btn-row">
+            <button onclick="startLossCalibration()"><i class="ti ti-player-play"></i> Start cooldown test now</button>
+          </div>
+        </div>
+
+        <div class="settings-subgroup lc-mode">
+          <h4 class="settings-subgroup-title">Schedule for tonight</h4>
+          <p class="settings-subgroup-hint">Waits until the window starts, then measures until the window ends. Duration above is not used.</p>
+          <div class="grid-3">
+            <div class="field"><label>Window start</label><input id="lc-start" type="time" value="01:00" /></div>
+            <div class="field"><label>Window end</label><input id="lc-end" type="time" value="05:00" /></div>
+          </div>
+          <div class="btn-row">
+            <button onclick="armLossCalibration()"><i class="ti ti-clock"></i> Arm nightly test</button>
+          </div>
+        </div>
+
+        <div class="btn-row lc-actions">
+          <button id="lc-cancel" onclick="cancelLossCalibration()" style="display:none"><i class="ti ti-x"></i> Cancel cooldown test</button>
+          <button id="lc-revert" onclick="revertLossCalibration()" style="display:none"><i class="ti ti-restore"></i> Revert loss coefficient</button>
+        </div>
+        <div class="settings-status" id="loss-cal-status"></div>
+      </section>
+
     </div>
-  </div>
-
-  <div class="btn-row lc-actions">
-    <button id="lc-cancel" onclick="cancelLossCalibration()" style="display:none"><i class="ti ti-x"></i> Cancel cooldown test</button>
-    <button id="lc-revert" onclick="revertLossCalibration()" style="display:none"><i class="ti ti-restore"></i> Revert loss coefficient</button>
-  </div>
-  <div class="detail" id="loss-cal-status" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
-
-  <div class="divider">Heat pump COP (datasheet baseline)</div>
-  <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
-    Add the COP values from your heat pump manual. Each row is one air temperature point;
-    values are interpolated by outdoor air temperature.
-  </p>
-  <div id="cop-rows"></div>
-  <div class="btn-row" style="margin-top:0">
-    <button type="button" onclick="addCopRow()"><i class="ti ti-plus"></i> Add COP point</button>
-  </div>
-
-  <div class="btn-row" style="justify-content:space-between">
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer">
-      <input type="checkbox" id="p-autocal" /> Auto-calibrate COP from live measurements
-    </label>
-    <button onclick="resetCalibration()"><i class="ti ti-restore"></i> Reset learned curve</button>
-  </div>
-  <div class="detail" id="cop-cal-status" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
-
-  <div class="btn-row">
-    <button onclick="recalcPrediction()"><i class="ti ti-calculator"></i> Recalculate</button>
-  </div>
   </div>
 </div>
 
@@ -488,6 +986,23 @@
   let chartZoomDay = null;
   let chartIsZoomed = false;
   let chartHiddenDatasets = loadChartHiddenDatasets();
+  let hpManualBusy = false;
+  let metricChart = null;
+  let todayPointsCache = null;
+  let todayPointsCacheDate = null;
+
+  const METRIC_CHARTS = {
+    pool: { label: 'Pool temp', unit: '°C', color: '#378ADD', field: 'poolTemp', decimals: 2 },
+    hpState: { label: 'HP state', unit: '', color: '#639922', field: 'hpState', decimals: 0, stepped: true, yMin: -0.05, yMax: 1.05, yTick: (v) => (v === 1 ? 'On' : v === 0 ? 'Off' : '') },
+    hpPower: { label: 'HP power', unit: 'W', color: '#EF9F27', field: 'hpPower', decimals: 0 },
+    net: { label: 'Net heating', unit: 'kW', color: '#E24B4A', field: 'netKw', decimals: 2 },
+    cop: { label: 'Measured COP', unit: '', color: '#888780', field: 'cop', decimals: 2 },
+    out1: { label: 'Outlet 1', unit: '°C', color: '#5C7A94', field: 'outlet1', decimals: 2 },
+    out2: { label: 'Outlet 2', unit: '°C', color: '#7A94B0', field: 'outlet2', decimals: 2 },
+    solar: { label: 'Solar', unit: 'W', color: '#EF9F27', field: 'solar', decimals: 0 },
+    sunActivity: { label: 'Sun activity', unit: '%', color: '#C8A020', field: 'solarUtil', decimals: 0, scale: 100 },
+    outdoor: { label: 'Outdoor', unit: '°C', color: '#9B8EC4', field: 'outdoor', decimals: 2 },
+  };
 
   function todayDateStr() {
     const d = new Date();
@@ -593,7 +1108,7 @@
   const FIELD_IDS = [
     'ha-url', 'ha-token',
     'e-pool-temp', 'e-outlet1', 'e-outlet2', 'e-solar', 'e-outdoor', 'e-hp-power', 'e-hp-state', 'e-weather',
-    'p-target', 'p-hp-max', 'p-volume', 'p-flow', 'p-surface', 'p-loss', 'p-solar-eff', 'p-solar-rated', 'p-ready-time', 'p-hp-off-time',
+    'p-target', 'p-hp-min', 'p-hp-max', 'p-volume', 'p-flow', 'p-surface', 'p-loss', 'p-solar-eff', 'p-solar-rated', 'p-ready-time', 'p-hp-off-time', 'p-hp-rated-kw',
   ];
 
   const DEFAULT_COP_CURVE = [
@@ -650,6 +1165,7 @@
       },
       prediction: {
         target: num('p-target'),
+        hpMinTemp: num('p-hp-min'),
         hpMaxTemp: num('p-hp-max'),
         volume: num('p-volume'),
         flow: num('p-flow'),
@@ -657,11 +1173,13 @@
         loss: num('p-loss'),
         solarEff: num('p-solar-eff'),
         solarRatedW: num('p-solar-rated'),
+        hpRatedKw: num('p-hp-rated-kw'),
         copCurve: readCopCurveFromForm(),
         schedule: {
           enabled: true,
           readyTime: $('p-ready-time').value || '10:00',
           hpOffTime: $('p-hp-off-time').value || '20:00',
+          autoControl: $('p-hp-auto').checked,
         },
       },
       calibration: { enabled: $('p-autocal').checked },
@@ -680,6 +1198,7 @@
     $('e-hp-state').value = settings.entities?.hpState || '';
     $('e-weather').value = settings.entities?.weather || '';
     $('p-target').value = settings.prediction?.target ?? 28;
+    $('p-hp-min').value = settings.prediction?.hpMinTemp ?? 26;
     $('p-hp-max').value = settings.prediction?.hpMaxTemp ?? 32;
     $('p-volume').value = settings.prediction?.volume ?? 16000;
     $('p-flow').value = settings.prediction?.flow ?? 25;
@@ -687,8 +1206,11 @@
     $('p-loss').value = settings.prediction?.loss ?? 15;
     $('p-solar-eff').value = settings.prediction?.solarEff ?? 0.8;
     $('p-solar-rated').value = settings.prediction?.solarRatedW ?? 170;
+    $('p-hp-rated-kw').value = settings.prediction?.hpRatedKw ?? 1.5;
     $('p-ready-time').value = settings.prediction?.schedule?.readyTime ?? '10:00';
     $('p-hp-off-time').value = settings.prediction?.schedule?.hpOffTime ?? '20:00';
+    $('p-hp-auto').checked = settings.prediction?.schedule?.autoControl ?? false;
+    syncHpControlUi();
     renderCopRows(settings.prediction?.copCurve);
     $('p-autocal').checked = settings.calibration?.enabled ?? true;
     renderCalibrationStatus(settings.calibration);
@@ -698,7 +1220,7 @@
       $('lc-end').value = settings.lossCal.schedule?.end ?? '05:00';
     }
     updateHaCardSummary(settings);
-    updateParamsCardSummary();
+    updateAllSummaries();
   }
 
   function renderCalibrationStatus(cal) {
@@ -722,12 +1244,23 @@
     try { return new URL(url).host; } catch { return url || 'not configured'; }
   }
 
-  function setHaCardCollapsed(collapsed) {
-    const card = $('ha-card');
-    const toggle = $('ha-card-toggle');
-    card.classList.toggle('expanded', !collapsed);
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    localStorage.setItem('ha-card-collapsed', String(collapsed));
+  function syncBodyScrollLock() {
+    const locked = !$('settings-modal').hidden || !$('metric-modal').hidden;
+    document.body.style.overflow = locked ? 'hidden' : '';
+  }
+
+  function openSettingsModal() {
+    const modal = $('settings-modal');
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    syncBodyScrollLock();
+  }
+
+  function closeSettingsModal() {
+    const modal = $('settings-modal');
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    syncBodyScrollLock();
   }
 
   function updateHaCardSummary(settings) {
@@ -738,47 +1271,142 @@
 
   function updateHaCardStatus(polling) {
     const el = $('ha-card-status');
+    const connectBtn = $('btn-connect');
+    const stopBtn = $('btn-stop');
+    const active = !!polling?.enabled;
+    if (connectBtn) connectBtn.hidden = active;
+    if (stopBtn) stopBtn.hidden = !active;
     if (polling?.enabled) {
       if (polling.lastError) {
         el.innerHTML = '<span class="dot dot-err"></span><span>Error</span>';
       } else if (polling.lastPollAt) {
         const when = new Date(polling.lastPollAt).toLocaleTimeString();
-        el.innerHTML = `<span class="dot dot-ok"></span><span>Polling · ${when}</span>`;
+        el.innerHTML = `<span class="dot dot-ok"></span><span>${when}</span>`;
       } else {
-        el.innerHTML = '<span class="dot dot-idle"></span><span>Polling…</span>';
+        el.innerHTML = '<span class="dot dot-idle"></span><span>Connecting…</span>';
       }
     } else {
       el.innerHTML = '<span class="dot dot-idle"></span><span>Stopped</span>';
     }
   }
 
-  function initHaCard(settings, polling) {
-    const configured = !!(settings.haToken && settings.haUrl);
-    const saved = localStorage.getItem('ha-card-collapsed');
-    setHaCardCollapsed(saved !== null ? saved === 'true' : configured);
-    updateHaCardSummary(settings);
-    updateHaCardStatus(polling);
-    $('ha-card-toggle').addEventListener('click', () => {
-      setHaCardCollapsed($('ha-card').classList.contains('expanded'));
+  function updateHpCardSummary() {
+    const el = $('hp-card-summary');
+    if (!el) return;
+    const target = num('p-target');
+    const hpMin = num('p-hp-min');
+    const hpMax = num('p-hp-max');
+    const ready = $('p-ready-time').value || '10:00';
+    const hpOff = $('p-hp-off-time').value || '20:00';
+    const auto = $('p-hp-auto').checked ? 'auto on' : 'manual';
+    el.textContent =
+      `${fmtTemp(target)}°C target · on ${fmtTemp(hpMin)}°C · off ${fmtTemp(hpMax)}°C · ${ready}–${hpOff} · ${auto}`;
+  }
+
+  function updateAllSummaries() {
+    updateHpCardSummary();
+  }
+
+  function initSettingsModal() {
+    $('settings-modal').addEventListener('click', (e) => {
+      if (e.target === $('settings-modal')) closeSettingsModal();
+    });
+    $('metric-modal').addEventListener('click', (e) => {
+      if (e.target === $('metric-modal')) closeMetricChart();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('metric-modal').hidden) closeMetricChart();
+      else if (!$('settings-modal').hidden) closeSettingsModal();
     });
   }
 
-  function setParamsCardCollapsed(collapsed) {
-    const card = $('params-card');
-    const toggle = $('params-card-toggle');
-    card.classList.toggle('expanded', !collapsed);
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    localStorage.setItem('params-card-collapsed', String(collapsed));
+  function initMetricCards() {
+    document.querySelectorAll('.metric-clickable[data-metric]').forEach((el) => {
+      el.addEventListener('click', () => openMetricChart(el.dataset.metric));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openMetricChart(el.dataset.metric);
+        }
+      });
+    });
   }
 
-  function updateParamsCardSummary() {
-    const target = num('p-target');
-    const hpMax = num('p-hp-max');
-    const loss = num('p-loss');
-    const ready = $('p-ready-time').value || '10:00';
-    const hpOff = $('p-hp-off-time').value || '20:00';
-    $('params-card-summary').textContent =
-      `Target ${fmtTemp(target)}°C · HP max ${fmtTemp(hpMax)}°C · ready ${ready} · off ${hpOff}`;
+  function initDashboardInputs() {
+    updateHpCardSummary();
+    syncHpControlUi();
+    ['p-target', 'p-hp-min', 'p-hp-max', 'p-ready-time', 'p-hp-off-time'].forEach((id) => {
+      $(id).addEventListener('input', updateHpCardSummary);
+    });
+  }
+
+  function initConnection(settings, polling) {
+    updateHaCardSummary(settings);
+    updateHaCardStatus(polling);
+    if (!(settings.haToken && settings.haUrl)) openSettingsModal();
+  }
+
+  function syncHpControlUi(hpOn) {
+    const auto = $('p-hp-auto').checked;
+    if (hpOn !== undefined && hpOn !== null && !hpManualBusy) {
+      $('p-hp-manual').checked = hpOn === 'on' || hpOn === true;
+    }
+    const running = $('p-hp-manual').checked;
+    $('hp-control-bar')?.classList.toggle('is-on', running || auto);
+    $('hp-manual-toggle-row')?.classList.toggle('is-disabled', auto);
+    const hint = $('hp-control-hint');
+    if (auto) {
+      hint.textContent = running
+        ? 'Auto control on — heat pump is running'
+        : 'Auto control on — off until schedule or temperature';
+    } else {
+      hint.textContent = running
+        ? 'Heat pump is running'
+        : 'Manual on/off via Home Assistant';
+    }
+  }
+
+  function syncHpManualToggle(hpOn) {
+    if (hpManualBusy) return;
+    syncHpControlUi(hpOn);
+  }
+
+  async function setHpManual(on) {
+    if (hpManualBusy || $('p-hp-auto').checked) return;
+    hpManualBusy = true;
+    $('hp-control-bar')?.classList.add('is-busy');
+    try {
+      await applyStatus(await api('/api/hp/set', {
+        method: 'POST',
+        body: JSON.stringify({ on }),
+      }));
+    } catch (e) {
+      $('err-msg').textContent = e.message;
+      syncHpManualToggle(on ? 'off' : 'on');
+    } finally {
+      hpManualBusy = false;
+      $('hp-control-bar')?.classList.remove('is-busy');
+    }
+  }
+
+  function renderHpAutoStatus(hpAuto) {
+    const el = $('hp-auto-status');
+    syncHpControlUi();
+    if (!hpAuto?.enabled) {
+      el.textContent = '';
+      return;
+    }
+    if (hpAuto.lastError) {
+      el.innerHTML = `<span class="schedule-bad">Auto control error: ${hpAuto.lastError}</span>`;
+      return;
+    }
+    if (hpAuto.lastAction && hpAuto.lastActionAt) {
+      const when = new Date(hpAuto.lastActionAt).toLocaleTimeString();
+      el.innerHTML = `<span class="schedule-ok">Auto control active · last ${hpAuto.lastAction.toUpperCase()} at ${when}</span>`;
+      return;
+    }
+    el.textContent = 'Auto control active — waiting for schedule window or temperature threshold';
   }
 
   function renderHpSchedule(hpSchedule) {
@@ -814,6 +1442,7 @@
 
       const tempCell = day.projectedTemp != null ? `${fmtTemp(day.projectedTemp)}°C` : '—';
       const offCell = day.poolTempAtOff != null ? `${fmtTemp(day.poolTempAtOff)}°C` : '—';
+      const kwhCell = day.hpKwh != null && day.hpKwh > 0 ? `${day.hpKwh.toFixed(1)} kWh` : '—';
       const startTemp = day.poolTempAtStart != null
         ? `<div class="schedule-muted">from ${fmtTemp(day.poolTempAtStart)}°C</div>`
         : '';
@@ -825,28 +1454,17 @@
         <td>${day.hpOffTime || hpSchedule.hpOffTime || '—'}</td>
         <td>${tempCell}</td>
         <td>${offCell}</td>
+        <td>${kwhCell}</td>
         <td class="${noteClass}">${note}</td>
       </tr>`;
     }).join('');
 
     el.innerHTML = `<table class="schedule-table">
       <thead>
-        <tr><th>Day</th><th>Start HP</th><th>Ready by</th><th>HP off</th><th>At ready</th><th>At HP off</th><th></th></tr>
+        <tr><th>Day</th><th>Start HP</th><th>Ready by</th><th>HP off</th><th>At ready</th><th>At HP off</th><th>HP kWh</th><th></th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
-  }
-
-  function initParamsCard() {
-    const saved = localStorage.getItem('params-card-collapsed');
-    setParamsCardCollapsed(saved !== null ? saved === 'true' : true);
-    updateParamsCardSummary();
-    $('params-card-toggle').addEventListener('click', () => {
-      setParamsCardCollapsed($('params-card').classList.contains('expanded'));
-    });
-    ['p-target', 'p-hp-max', 'p-loss', 'p-volume', 'p-ready-time', 'p-hp-off-time'].forEach((id) => {
-      $(id).addEventListener('input', updateParamsCardSummary);
-    });
   }
 
   async function api(path, options = {}) {
@@ -863,6 +1481,7 @@
 
   function scheduleSave() {
     updateHaCardSummary();
+    updateAllSummaries();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try {
@@ -874,6 +1493,15 @@
   function bindAutoSave() {
     FIELD_IDS.forEach(id => $(id).addEventListener('input', scheduleSave));
     $('p-autocal').addEventListener('change', scheduleSave);
+    $('p-hp-auto').addEventListener('change', () => {
+      syncHpControlUi();
+      updateHpCardSummary();
+      scheduleSave();
+    });
+    $('p-hp-manual').addEventListener('change', () => {
+      if (!$('p-hp-auto').checked) setHpManual($('p-hp-manual').checked);
+      else syncHpControlUi();
+    });
   }
 
   async function resetCalibration() {
@@ -1299,6 +1927,138 @@
     applyHiddenStateOn(chart);
   }
 
+  function ensureMetricChart() {
+    if (metricChart) return metricChart;
+    const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    const tickColor = isDark ? '#888780' : '#5f5e5a';
+    metricChart = new Chart($('metricChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        datasets: [{
+          data: [],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: false,
+          ...CHART_DATASET_DEFAULTS,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                const x = items[0]?.parsed?.x ?? items[0]?.raw?.x;
+                return x != null ? timeLabel(new Date(x)) : '';
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            ticks: {
+              color: tickColor,
+              font: { size: 11 },
+              maxTicksLimit: 10,
+              callback: (v) => timeLabel(new Date(v)),
+            },
+            grid: { color: gridColor },
+          },
+          y: {
+            ticks: { color: tickColor, font: { size: 11 } },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+    return metricChart;
+  }
+
+  async function loadTodayPoints() {
+    const today = todayDateStr();
+    if (todayPointsCacheDate === today && todayPointsCache) return todayPointsCache;
+    const history = await api(`/api/history?date=${today}`);
+    todayPointsCache = history.points || [];
+    todayPointsCacheDate = today;
+    return todayPointsCache;
+  }
+
+  function buildMetricSeries(points, def, bounds) {
+    const data = [];
+    for (const p of points) {
+      const raw = p[def.field];
+      if (raw == null || !isFinite(+raw)) continue;
+      const x = new Date(p.ts).getTime();
+      if (x < bounds.start || x > bounds.end) continue;
+      let y = +raw;
+      if (def.scale) y *= def.scale;
+      if (def.decimals != null) y = +y.toFixed(def.decimals);
+      data.push({ x, y });
+    }
+    return data.sort((a, b) => a.x - b.x);
+  }
+
+  async function openMetricChart(metricKey) {
+    const def = METRIC_CHARTS[metricKey];
+    if (!def) return;
+    const points = downsamplePoints(await loadTodayPoints());
+    const bounds = dayBoundsMs(todayDateStr());
+    const data = buildMetricSeries(points, def, bounds);
+    $('metric-modal-title').textContent = def.label;
+    const unitSuffix = def.unit ? ` ${def.unit}` : '';
+    $('metric-modal-subtitle').textContent = data.length
+      ? `Today · ${data.length} readings`
+      : 'Today · no data yet (new metrics need a fresh polling session)';
+    $('metric-chart-wrap').style.display = data.length ? '' : 'none';
+    $('metric-chart-empty').style.display = data.length ? 'none' : '';
+    if (data.length) {
+      const mc = ensureMetricChart();
+      const ds = mc.data.datasets[0];
+      ds.data = data;
+      ds.borderColor = def.color;
+      ds.stepped = def.stepped || false;
+      ds.label = def.label;
+      mc.options.scales.x.min = bounds.start;
+      mc.options.scales.x.max = bounds.end;
+      if (def.yMin != null) mc.options.scales.y.min = def.yMin;
+      else delete mc.options.scales.y.min;
+      if (def.yMax != null) mc.options.scales.y.max = def.yMax;
+      else delete mc.options.scales.y.max;
+      mc.options.scales.y.title = {
+        display: !!def.unit,
+        text: def.unit,
+        color: mc.options.scales.y.ticks.color,
+        font: { size: 11 },
+      };
+      mc.options.scales.y.ticks.callback = def.yTick
+        ? (v) => def.yTick(v) || ''
+        : (v) => (+v).toFixed(def.decimals ?? 1);
+      mc.options.plugins.tooltip.callbacks.label = (ctx) => {
+        const y = ctx.parsed?.y ?? ctx.raw?.y;
+        if (def.yTick) return ` ${def.yTick(y) || y}`;
+        return ` ${y != null ? (+y).toFixed(def.decimals ?? 1) + unitSuffix : '—'}`;
+      };
+      mc.update();
+    }
+    const modal = $('metric-modal');
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    syncBodyScrollLock();
+  }
+
+  function closeMetricChart() {
+    const modal = $('metric-modal');
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    syncBodyScrollLock();
+  }
+
   function timeLabel(date) {
     return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
   }
@@ -1417,8 +2177,9 @@
     $('mv-outdoor').innerHTML = fmtTemp(state.outdoor) + '<span class="metric-unit">°C</span>';
     $('mv-hp-power').innerHTML = fmt(state.hpPower, 0) + '<span class="metric-unit">W</span>';
     $('mv-hp-state').innerHTML = state.hpState === 'on'
-      ? '<span style="color:#639922">● On</span>'
-      : '<span style="color:#888780">○ Off</span>';
+      ? '<span class="metric-status-on">● On</span>'
+      : '<span class="metric-status-off">○ Off</span>';
+    syncHpManualToggle(state.hpState);
 
     if (status.powers) {
       $('mv-net').innerHTML = fmt(status.powers.net / 1000, 2) + '<span class="metric-unit">kW</span>';
@@ -1437,6 +2198,7 @@
     if (pred) {
       updatePredictionUI(pred.minutes, state.poolTemp, status.powers);
       renderHpSchedule(status.hpSchedule);
+      renderHpAutoStatus(status.hpAuto);
       if (isViewingForecastDay() || forecastSnapshots.length) {
         if (status.forecast?.length) lastForecast = status.forecast;
         if (polling.lastPollAt !== lastChartPollAt) {
@@ -1452,6 +2214,10 @@
     const history = await api(`/api/history?date=${selectedDate}`);
     historyPoints = downsamplePoints(history.points || []);
     forecastSnapshots = history.forecastSnapshots || [];
+    if (isViewingToday()) {
+      todayPointsCache = history.points || [];
+      todayPointsCacheDate = selectedDate;
+    }
     renderChart(
       isViewingToday() ? currentPredCurve : null,
       isViewingForecastDay() ? effectiveForecast(forecast) : null,
@@ -1521,7 +2287,9 @@
 
   async function boot() {
     initChart();
-    initParamsCard();
+    initSettingsModal();
+    initMetricCards();
+    initDashboardInputs();
     bindAutoSave();
     selectedDate = todayDateStr();
     try {
@@ -1529,7 +2297,7 @@
       applySettings(settings);
       await refreshAvailableDates();
       const status = await api('/api/status');
-      initHaCard(settings, status.polling);
+      initConnection(settings, status.polling);
       await loadHistoryIntoChart(status.prediction?.curve, status.forecast);
       await applyStatus(status);
     } catch (e) {

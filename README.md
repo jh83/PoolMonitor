@@ -16,7 +16,8 @@ pool-dashboard/
 │   ├── index.js
 │   ├── store.js
 │   ├── ha.js
-│   └── prediction.js
+│   ├── prediction.js
+│   └── log.js
 ├── www/
 │   └── index.html
 └── README.md
@@ -38,17 +39,44 @@ The dashboard server talks to Home Assistant directly, so **CORS configuration i
 docker compose up -d --build
 ```
 
+Set `POLL_VERBOSE=1` in `docker-compose.yml` to log detailed poll lines to the container log.
+
 The dashboard is now available at `http://<docker-host-ip>:8088`
 
 ### 3. Configure the dashboard
 
-- Paste your HA URL: `http://homeassistant.local:8123`
-- Paste your access token
-- Update the entity IDs to match your HA setup
-- Click **Connect & start polling**
+Open **Settings** (gear icon, top right):
+
+1. Under **Home Assistant → Connection**, paste your HA URL and access token
+2. Under **Entity IDs**, update entity IDs to match your HA setup
+3. Under **Data polling**, click **Connect & start polling**
 
 Settings are saved automatically as you edit them. After you start polling once, the
-container keeps polling in the background and resumes after a restart.
+container keeps polling in the background and resumes after a restart. Use **Stop polling**
+in the same section when you want to pause data collection.
+
+If HA is not configured yet, the settings modal opens automatically on first visit.
+
+## Using the dashboard
+
+The main page is ordered for day-to-day monitoring:
+
+1. **Header** — title with a live status dot and last poll time when polling is active
+2. **At-a-glance** — primary metrics (pool temp, HP state, power, net heating, COP) and a
+   secondary **Sensors** row; **Estimated arrival at target** on the right
+3. **Chart** — temperature and solar history with day navigation
+4. **Heat pump** — schedule, control, and temperature thresholds
+
+Click any metric tile to open a popup chart of **today's** history for that value.
+
+All advanced configuration lives in **Settings**, grouped into:
+
+| Section | What it controls |
+|---|---|
+| **Home Assistant** | Connection, entity IDs, start/stop polling |
+| **Pool & solar model** | Volume, flow, surface area, loss coefficient, solar assumptions |
+| **Heat pump datasheet** | Rated electrical draw, COP curve, live COP learning |
+| **Loss coefficient calibration** | Cooldown tests to refine heat loss |
 
 ## Entity IDs to configure
 
@@ -71,7 +99,8 @@ After your first real heating session, compare the predicted vs actual curve on 
 Each selected day uses a **00:00–23:59** time axis. The chart shows:
 
 - **Actual water temp** — measured pool temperature
-- **Predicted now** / **Initial prediction** — current and session-start forecasts
+- **Predicted now** / **Initial prediction** — current and session-start forecasts; archived
+  forecast snapshots are stored hourly for past days
 - **Target** — your target pool temperature
 - **Measured air temp** — outdoor air from history
 - **Forecast air temp** — hourly weather forecast (today only)
@@ -81,7 +110,7 @@ Use the day arrows above the chart to browse the last 30 days of history. **Scro
 chart to zoom the time axis, **Shift+drag** to pan, and click legend labels to show/hide
 individual lines.
 
-The **Estimated arrival at target** card at the top updates live while polling runs.
+The **Estimated arrival at target** panel updates live while polling runs.
 
 - Actual heated **slower** than predicted → raise the **loss coefficient**
 - Actual heated **faster** than predicted → lower the **loss coefficient**
@@ -90,22 +119,56 @@ The default is 15 W/m²·°C. Above-ground pools with exposed walls typically la
 
 ### Loss coefficient calibration
 
-Instead of guessing the loss coefficient, you can run a **cooldown test** with the heat pump
-off and no sun: the dashboard measures how fast the pool cools and back-solves the coefficient.
-You can **run now** (set a duration) or **schedule for tonight** (set a time window).
-Requires background polling. The test auto-aborts if the heat pump turns on or solar is detected.
+In **Settings → Loss coefficient calibration**, you can run a **cooldown test** with the heat
+pump off and no sun: the dashboard measures how fast the pool cools and back-solves the
+coefficient. You can **run now** (set a duration) or **schedule for tonight** (set a time
+window). Requires background polling. The test auto-aborts if the heat pump turns on or solar
+is detected.
 
 ### Heat pump COP
 
-Add COP values from your heat pump manual at different outdoor air temperatures — the model
-interpolates between them. Enable **auto-calibrate COP from live measurements** to refine the
-curve over time from real heating data (shown as **Measured COP** on the dashboard).
+In **Settings → Heat pump datasheet**, add COP values from your manual at different outdoor
+air temperatures — the model interpolates between them. Set **Rated power (kW)** to the
+datasheet or measured consumption; this drives **schedule kWh** estimates (raw electrical use,
+not COP-adjusted). Live **HP power** on the dashboard still comes from your HA sensor.
+
+Enable **Auto-calibrate from live measurements** to refine the curve over time from real
+heating data (shown as **Measured COP** on the dashboard).
+
+### Daily heat pump schedule
+
+The **Heat pump** card on the main page plans heating for today and upcoming forecast days:
+
+| Setting | Purpose |
+|---|---|
+| **Ready by** | Target time to reach pool temperature each day |
+| **HP off (evening)** | Latest time the heat pump may run |
+| **Target temperature** | Desired pool temperature (prediction and auto-off) |
+| **HP on/off temperature — on** | Auto-control turns the HP on when pool temp drops below this |
+| **HP on/off temperature — off** | Heating stops at or above this (auto control and schedule simulation) |
+
+The table shows suggested **Start HP** times, projected temps at ready/off, **HP kWh**
+(electrical consumption for the planned run), and heating duration. Overnight cooling between
+days uses your loss coefficient and the air temperature forecast.
+
+### Heat pump control
+
+The **Control** section has **On** and **Auto** toggles that talk to your **Heat pump on/off**
+switch entity in HA:
+
+- **On** — manual on/off; syncs with live HA state (disabled while Auto is on)
+- **Auto** — when enabled, within each day's schedule window (scheduled start → evening off):
+  - turns **on** when pool temperature is below **HP on/off — on**
+  - turns **off** at **target temperature**, **HP on/off — off**, or **HP off** time
+
+Auto control is skipped during loss-coefficient calibration tests.
 
 ### Solar
 
-Set **Solar panel rated power** to your panel's peak wattage (e.g. 170 W). The dashboard
-shows **Sun activity** as current output as a percentage of that rating. Future solar in
-the prediction uses cloud coverage from the weather forecast when available.
+Set **Solar panel rated power** in **Settings → Pool & solar model** to your panel's peak
+wattage (e.g. 170 W). The dashboard shows **Sun activity** as current output as a percentage
+of that rating. Future solar in the prediction uses cloud coverage from the weather forecast
+when available.
 
 ### Weather forecast
 
@@ -130,4 +193,6 @@ Settings and history are stored in a Docker volume (`pool-dashboard-data` at `/d
 Chart history is kept for **30 days** (older points are pruned automatically). Use the **Today** button and day arrows above the chart to navigate between days. Reconnecting no longer clears past history — only a new session marker is recorded for the initial-prediction line.
 
 At default polling (every 30 seconds), each day stores roughly 2,880 readings. The chart
-downsamples to 500 points per day when there are more readings than that.
+downsamples to 500 points per day when there are more readings than that. Metric popup charts
+use the same history; newly added metric fields only appear in history recorded after an
+upgrade and rebuild.
