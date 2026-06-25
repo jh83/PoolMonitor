@@ -68,6 +68,16 @@ function calcLoss(prediction, poolTemp, outdoorTemp, windSpeed) {
   return prediction.loss * prediction.surface * dT * windFactor;
 }
 
+function effectiveHpMaxTemp(prediction) {
+  const max = prediction.hpMaxTemp;
+  if (max == null || !isFinite(max) || max <= 0) return Infinity;
+  return max;
+}
+
+function isHpHeatingAllowed(prediction, poolTemp) {
+  return poolTemp < effectiveHpMaxTemp(prediction);
+}
+
 export function computeLossCoefficient(samples, prediction) {
   const valid = (samples || [])
     .filter((s) => isFinite(s.poolTemp) && isFinite(s.outdoor))
@@ -134,7 +144,7 @@ export function computeLossCoefficient(samples, prediction) {
 }
 
 function calcHpHeat(prediction, state) {
-  if (state.hpState !== 'on') {
+  if (state.hpState !== 'on' || !isHpHeatingAllowed(prediction, state.poolTemp)) {
     return { hpHeat: 0, cop: null };
   }
 
@@ -217,4 +227,267 @@ export function buildPrediction(prediction, startTemp, state, forecast) {
 
   const reached = curve.find((p) => p.temp >= target);
   return { minutes: reached ? reached.t : null, curve };
+}
+
+const SCHEDULE_STEP_MIN = 5;
+
+export function parseHHMM(value) {
+  const [h, m] = (value || '').split(':').map(Number);
+  if (!isFinite(h) || !isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+export function formatHHMM(minuteOfDay) {
+  const h = Math.floor(minuteOfDay / 60);
+  const m = minuteOfDay % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function parseForecastTime(value) {
+  if (value == null) return NaN;
+  let t = new Date(value).getTime();
+  if (!isNaN(t)) return t;
+  t = new Date(String(value).replace(' ', 'T')).getTime();
+  return isNaN(t) ? NaN : t;
+}
+
+function toDateStrLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function dateAtMinute(dateStr, minuteOfDay) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+}
+
+function normalizeForecastEntries(forecast) {
+  return (forecast || [])
+    .map((fc) => ({
+      datetime: fc.datetime ?? fc.time ?? fc.forecast_time,
+      temperature: fc.temperature ?? fc.native_temperature ?? fc.temp,
+      wind_speed: fc.wind_speed ?? 0,
+      cloud_coverage: fc.cloud_coverage,
+    }))
+    .filter((fc) => fc.temperature != null && !isNaN(+fc.temperature));
+}
+
+function forecastAt(forecast, atMs, fallbackOutdoor = 20) {
+  const entries = normalizeForecastEntries(forecast);
+  if (!entries.length) {
+    return { temperature: fallbackOutdoor, wind_speed: 0, cloud_coverage: null };
+  }
+
+  let best = entries[0];
+  let bestDist = Infinity;
+  for (const entry of entries) {
+    const t = parseForecastTime(entry.datetime);
+    if (isNaN(t)) continue;
+    const dist = Math.abs(t - atMs);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = entry;
+    }
+  }
+  return best;
+}
+
+function plannedSolarW(prediction, forecast, atMs) {
+  const rated = prediction.solarRatedW;
+  if (!rated || rated <= 0) return 0;
+  const fc = forecastAt(forecast, atMs);
+  if (fc.cloud_coverage != null) return rated * (1 - fc.cloud_coverage / 100);
+  const hour = new Date(atMs).getHours();
+  if (hour < 6 || hour >= 20) return 0;
+  return rated * 0.4;
+}
+
+function plannedNetPower(prediction, poolTemp, outdoor, wind, solarW, hpOn, hpPowerW) {
+  let hpHeat = 0;
+  let cop = null;
+  if (hpOn && isHpHeatingAllowed(prediction, poolTemp)) {
+    cop = interpolateCop(outdoor, prediction.copCurve);
+    hpHeat = (hpPowerW || 1500) * cop;
+  }
+  const solar = (solarW || 0) * prediction.solarEff;
+  const loss = calcLoss(prediction, poolTemp, outdoor, wind);
+  return { net: hpHeat + solar - loss, hpHeat, solar, loss, cop };
+}
+
+function simulateTemp(prediction, startTemp, fromMin, toMin, dateStr, forecast, hpOnFn, hpPowerW) {
+  if (toMin <= fromMin) return startTemp;
+  let temp = startTemp;
+  const mass = prediction.volume;
+  for (let m = fromMin; m < toMin; m += SCHEDULE_STEP_MIN) {
+    const atMs = dateAtMinute(dateStr, m).getTime();
+    const fc = forecastAt(forecast, atMs);
+    const outdoor = +fc.temperature;
+    const wind = fc.wind_speed || 0;
+    const solarW = plannedSolarW(prediction, forecast, atMs);
+    const { net } = plannedNetPower(prediction, temp, outdoor, wind, solarW, hpOnFn(m), hpPowerW);
+    temp = Math.min(temp + (net * SCHEDULE_STEP_MIN * 60) / (mass * WATER_CP), 45);
+    if (temp < 0) temp = 0;
+  }
+  return +temp.toFixed(2);
+}
+
+function findLatestHpStart(prediction, startTemp, dateStr, fromMin, readyMin, forecast, hpPowerW) {
+  if (startTemp >= prediction.target) {
+    return { startMin: fromMin, alreadyAtTarget: true };
+  }
+
+  let latest = null;
+  for (let startMin = readyMin - SCHEDULE_STEP_MIN; startMin >= fromMin; startMin -= SCHEDULE_STEP_MIN) {
+    const hpOnFn = (m) => m >= startMin && m < readyMin;
+    const tempAtReady = simulateTemp(
+      prediction, startTemp, fromMin, readyMin, dateStr, forecast, hpOnFn, hpPowerW,
+    );
+    if (tempAtReady >= prediction.target) {
+      latest = startMin;
+      break;
+    }
+  }
+
+  if (latest == null) return null;
+  return { startMin: latest, alreadyAtTarget: false };
+}
+
+function dayLabel(dateStr, todayStr, tomorrowStr) {
+  if (dateStr === todayStr) return 'Today';
+  if (dateStr === tomorrowStr) return 'Tomorrow';
+  return dateStr;
+}
+
+function resolveHpOffMin(readyMin, hpOffMin) {
+  if (hpOffMin == null) return readyMin;
+  if (hpOffMin <= readyMin) return readyMin + SCHEDULE_STEP_MIN;
+  return hpOffMin;
+}
+
+/** HP on from morning start until evening shutoff (includes heating through ready time). */
+function hpOnUntilEvening(startMin, hpOffMin) {
+  return (m) => m >= startMin && m < hpOffMin;
+}
+
+export function buildHpSchedule(prediction, state, forecast, scheduleConfig, now = new Date()) {
+  const readyTime = scheduleConfig?.readyTime ?? '10:00';
+  const hpOffTime = scheduleConfig?.hpOffTime ?? '20:00';
+  const readyMin = parseHHMM(readyTime);
+  const hpOffMin = resolveHpOffMin(readyMin, parseHHMM(hpOffTime));
+  if (readyMin == null || !isFinite(state?.poolTemp)) {
+    return { enabled: scheduleConfig?.enabled !== false, readyTime, hpOffTime, days: [] };
+  }
+
+  const enabled = scheduleConfig?.enabled !== false;
+  const hpPowerW = scheduleConfig?.assumedHpPowerW || state.hpPower || 1500;
+  const todayStr = toDateStrLocal(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = toDateStrLocal(tomorrow);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  const daySet = new Set([todayStr, tomorrowStr]);
+  for (const entry of normalizeForecastEntries(forecast)) {
+    const t = parseForecastTime(entry.datetime);
+    if (!isNaN(t)) daySet.add(toDateStrLocal(new Date(t)));
+  }
+
+  const days = [...daySet].sort().slice(0, 8);
+  let carryTemp = state.poolTemp;
+  const results = [];
+
+  for (const dateStr of days) {
+    const isToday = dateStr === todayStr;
+    const simFromMin = isToday ? nowMin : 0;
+
+    if (isToday && nowMin >= readyMin) {
+      const hpOnFn = (m) => m >= nowMin && m < hpOffMin;
+      carryTemp = simulateTemp(
+        prediction, carryTemp, nowMin, 24 * 60, dateStr, forecast, hpOnFn, hpPowerW,
+      );
+      results.push({
+        date: dateStr,
+        label: 'Today',
+        status: 'past',
+        message: 'Ready time already passed',
+        readyTime: formatHHMM(readyMin),
+        hpOffTime: formatHHMM(hpOffMin),
+      });
+      continue;
+    }
+
+    const startTemp = carryTemp;
+
+    if (startTemp >= prediction.target) {
+      carryTemp = simulateTemp(
+        prediction, startTemp, simFromMin, 24 * 60, dateStr, forecast, () => false, hpPowerW,
+      );
+      results.push({
+        date: dateStr,
+        label: dayLabel(dateStr, todayStr, tomorrowStr),
+        status: 'at_target',
+        hpStart: null,
+        readyTime: formatHHMM(readyMin),
+        hpOffTime: formatHHMM(hpOffMin),
+        projectedTemp: startTemp,
+        poolTempAtStart: startTemp,
+        poolTempAtOff: carryTemp,
+        message: 'Already at target',
+      });
+      continue;
+    }
+
+    const found = findLatestHpStart(
+      prediction, startTemp, dateStr, simFromMin, readyMin, forecast, hpPowerW,
+    );
+
+    if (!found) {
+      carryTemp = simulateTemp(
+        prediction, startTemp, simFromMin, 24 * 60, dateStr, forecast, () => false, hpPowerW,
+      );
+      results.push({
+        date: dateStr,
+        label: dayLabel(dateStr, todayStr, tomorrowStr),
+        status: 'impossible',
+        readyTime: formatHHMM(readyMin),
+        hpOffTime: formatHHMM(hpOffMin),
+        poolTempAtStart: startTemp,
+        poolTempAtOff: carryTemp,
+        message: 'Cannot reach target in time',
+      });
+      continue;
+    }
+
+    const hpStartMin = found.startMin;
+    const dayHpOn = hpOnUntilEvening(hpStartMin, hpOffMin);
+    const tempAtReady = simulateTemp(
+      prediction, startTemp, simFromMin, readyMin, dateStr, forecast, dayHpOn, hpPowerW,
+    );
+    carryTemp = simulateTemp(
+      prediction, startTemp, simFromMin, 24 * 60, dateStr, forecast, dayHpOn, hpPowerW,
+    );
+
+    results.push({
+      date: dateStr,
+      label: dayLabel(dateStr, todayStr, tomorrowStr),
+      status: found.alreadyAtTarget ? 'at_target' : 'scheduled',
+      hpStart: found.alreadyAtTarget ? null : formatHHMM(hpStartMin),
+      readyTime: formatHHMM(readyMin),
+      hpOffTime: formatHHMM(hpOffMin),
+      projectedTemp: tempAtReady,
+      poolTempAtStart: startTemp,
+      poolTempAtOff: carryTemp,
+      heatingMinutes: found.alreadyAtTarget ? 0 : readyMin - hpStartMin,
+      message: found.alreadyAtTarget ? 'Already at target' : null,
+    });
+  }
+
+  return {
+    enabled,
+    readyTime,
+    hpOffTime: formatHHMM(hpOffMin),
+    days: results,
+  };
 }

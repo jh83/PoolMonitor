@@ -218,6 +218,32 @@
     .lc-mode h3 { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
     .lc-mode .lc-hint { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
     .lc-mode .btn-row { margin-top: 0.75rem; margin-bottom: 0; }
+
+    .schedule-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .schedule-header h2 { margin-bottom: 0; }
+    .schedule-header .field { min-width: 140px; margin: 0; }
+    .schedule-times { display: flex; gap: 12px; flex-wrap: wrap; }
+    .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .schedule-table th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--text2);
+      font-weight: 500;
+      padding: 6px 8px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .schedule-table td { padding: 8px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
+    .schedule-table tr:last-child td { border-bottom: none; }
+    .schedule-ok { color: var(--green); }
+    .schedule-bad { color: var(--red); }
+    .schedule-muted { color: var(--text2); font-size: 12px; }
   </style>
 </head>
 <body>
@@ -246,6 +272,29 @@
     <div class="detail" id="pred-detail">Connect to Home Assistant to start prediction</div>
     <div class="net-breakdown" id="net-breakdown"></div>
   </div>
+</div>
+
+<!-- Daily HP schedule -->
+<div class="card" id="hp-schedule-card">
+  <div class="schedule-header">
+    <h2>Daily heat pump schedule</h2>
+    <div class="schedule-times">
+      <div class="field">
+        <label>Ready by</label>
+        <input id="p-ready-time" type="time" value="10:00" />
+      </div>
+      <div class="field">
+        <label>HP off (evening)</label>
+        <input id="p-hp-off-time" type="time" value="20:00" />
+      </div>
+    </div>
+  </div>
+  <p class="detail" style="font-size:12px;color:var(--text2);margin:8px 0 10px">
+    Suggested HP start each day to reach target by <strong>Ready by</strong>. Assumes HP runs until
+    <strong>HP off</strong> (but not above your <strong>HP max</strong> setting), then cools overnight
+    using your loss coefficient and the air temperature forecast.
+  </p>
+  <div id="hp-schedule-body" class="schedule-muted">Start polling to generate the schedule</div>
 </div>
 
 <!-- Chart -->
@@ -314,6 +363,7 @@
   <div class="card-body" id="params-card-body">
   <div class="grid-3">
     <div class="field"><label>Target temperature (°C)</label><input id="p-target" type="number" value="28" /></div>
+    <div class="field"><label>HP max temperature (°C)</label><input id="p-hp-max" type="number" step="0.5" value="32" /></div>
     <div class="field"><label>Pool volume (liters)</label><input id="p-volume" type="number" value="16000" /></div>
     <div class="field"><label>Flow rate (L/min)</label><input id="p-flow" type="number" value="25" /></div>
     <div class="field"><label>Pool surface area (m²)</label><input id="p-surface" type="number" value="15" /></div>
@@ -543,7 +593,7 @@
   const FIELD_IDS = [
     'ha-url', 'ha-token',
     'e-pool-temp', 'e-outlet1', 'e-outlet2', 'e-solar', 'e-outdoor', 'e-hp-power', 'e-hp-state', 'e-weather',
-    'p-target', 'p-volume', 'p-flow', 'p-surface', 'p-loss', 'p-solar-eff', 'p-solar-rated',
+    'p-target', 'p-hp-max', 'p-volume', 'p-flow', 'p-surface', 'p-loss', 'p-solar-eff', 'p-solar-rated', 'p-ready-time', 'p-hp-off-time',
   ];
 
   const DEFAULT_COP_CURVE = [
@@ -600,6 +650,7 @@
       },
       prediction: {
         target: num('p-target'),
+        hpMaxTemp: num('p-hp-max'),
         volume: num('p-volume'),
         flow: num('p-flow'),
         surface: num('p-surface'),
@@ -607,6 +658,11 @@
         solarEff: num('p-solar-eff'),
         solarRatedW: num('p-solar-rated'),
         copCurve: readCopCurveFromForm(),
+        schedule: {
+          enabled: true,
+          readyTime: $('p-ready-time').value || '10:00',
+          hpOffTime: $('p-hp-off-time').value || '20:00',
+        },
       },
       calibration: { enabled: $('p-autocal').checked },
     };
@@ -624,12 +680,15 @@
     $('e-hp-state').value = settings.entities?.hpState || '';
     $('e-weather').value = settings.entities?.weather || '';
     $('p-target').value = settings.prediction?.target ?? 28;
+    $('p-hp-max').value = settings.prediction?.hpMaxTemp ?? 32;
     $('p-volume').value = settings.prediction?.volume ?? 16000;
     $('p-flow').value = settings.prediction?.flow ?? 25;
     $('p-surface').value = settings.prediction?.surface ?? 15;
     $('p-loss').value = settings.prediction?.loss ?? 15;
     $('p-solar-eff').value = settings.prediction?.solarEff ?? 0.8;
     $('p-solar-rated').value = settings.prediction?.solarRatedW ?? 170;
+    $('p-ready-time').value = settings.prediction?.schedule?.readyTime ?? '10:00';
+    $('p-hp-off-time').value = settings.prediction?.schedule?.hpOffTime ?? '20:00';
     renderCopRows(settings.prediction?.copCurve);
     $('p-autocal').checked = settings.calibration?.enabled ?? true;
     renderCalibrationStatus(settings.calibration);
@@ -714,9 +773,68 @@
 
   function updateParamsCardSummary() {
     const target = num('p-target');
+    const hpMax = num('p-hp-max');
     const loss = num('p-loss');
+    const ready = $('p-ready-time').value || '10:00';
+    const hpOff = $('p-hp-off-time').value || '20:00';
     $('params-card-summary').textContent =
-      `Target ${fmtTemp(target)}°C · loss ${loss} W/m²·°C`;
+      `Target ${fmtTemp(target)}°C · HP max ${fmtTemp(hpMax)}°C · ready ${ready} · off ${hpOff}`;
+  }
+
+  function renderHpSchedule(hpSchedule) {
+    const el = $('hp-schedule-body');
+    if (!hpSchedule?.days?.length) {
+      el.innerHTML = '<span class="schedule-muted">Start polling to generate the schedule</span>';
+      return;
+    }
+    if (hpSchedule.enabled === false) {
+      el.innerHTML = '<span class="schedule-muted">Schedule disabled</span>';
+      return;
+    }
+
+    const rows = hpSchedule.days.map((day) => {
+      let startCell = '—';
+      let note = day.message || '';
+      let noteClass = 'schedule-muted';
+
+      if (day.status === 'scheduled') {
+        startCell = `<strong>${day.hpStart}</strong>`;
+        note = `${day.heatingMinutes} min heating`;
+        noteClass = 'schedule-ok';
+      } else if (day.status === 'at_target') {
+        startCell = 'Not needed';
+        note = day.message || 'Already at target';
+        noteClass = 'schedule-ok';
+      } else if (day.status === 'impossible') {
+        note = day.message || 'Cannot reach target in time';
+        noteClass = 'schedule-bad';
+      } else if (day.status === 'past') {
+        note = day.message || 'Ready time already passed';
+      }
+
+      const tempCell = day.projectedTemp != null ? `${fmtTemp(day.projectedTemp)}°C` : '—';
+      const offCell = day.poolTempAtOff != null ? `${fmtTemp(day.poolTempAtOff)}°C` : '—';
+      const startTemp = day.poolTempAtStart != null
+        ? `<div class="schedule-muted">from ${fmtTemp(day.poolTempAtStart)}°C</div>`
+        : '';
+
+      return `<tr>
+        <td><strong>${day.label}</strong>${startTemp}</td>
+        <td>${startCell}</td>
+        <td>${day.readyTime}</td>
+        <td>${day.hpOffTime || hpSchedule.hpOffTime || '—'}</td>
+        <td>${tempCell}</td>
+        <td>${offCell}</td>
+        <td class="${noteClass}">${note}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `<table class="schedule-table">
+      <thead>
+        <tr><th>Day</th><th>Start HP</th><th>Ready by</th><th>HP off</th><th>At ready</th><th>At HP off</th><th></th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
   }
 
   function initParamsCard() {
@@ -726,7 +844,7 @@
     $('params-card-toggle').addEventListener('click', () => {
       setParamsCardCollapsed($('params-card').classList.contains('expanded'));
     });
-    ['p-target', 'p-loss', 'p-volume'].forEach((id) => {
+    ['p-target', 'p-hp-max', 'p-loss', 'p-volume', 'p-ready-time', 'p-hp-off-time'].forEach((id) => {
       $(id).addEventListener('input', updateParamsCardSummary);
     });
   }
@@ -1318,6 +1436,7 @@
     const pred = status.prediction;
     if (pred) {
       updatePredictionUI(pred.minutes, state.poolTemp, status.powers);
+      renderHpSchedule(status.hpSchedule);
       if (isViewingForecastDay() || forecastSnapshots.length) {
         if (status.forecast?.length) lastForecast = status.forecast;
         if (polling.lastPollAt !== lastChartPollAt) {

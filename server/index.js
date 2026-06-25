@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchPoolState } from './ha.js';
 import { pollError, pollLog, pollVerbose } from './log.js';
 import {
+  buildHpSchedule,
   buildPrediction,
   calcNetPower,
   calibrateCurve,
@@ -40,6 +41,7 @@ let runtime = {
   powers: null,
   prediction: null,
   measuredCop: null,
+  hpSchedule: null,
 };
 
 const app = express();
@@ -171,6 +173,12 @@ function handleLossCalibration(state, now = new Date()) {
   else saveConfig(config);
 }
 
+function computeHpSchedule(state, forecast) {
+  if (!state?.poolTemp) return null;
+  const pred = effectivePrediction();
+  return buildHpSchedule(pred, state, forecast, pred.schedule);
+}
+
 function buildStatus() {
   return {
     polling: {
@@ -184,6 +192,7 @@ function buildStatus() {
     powers: runtime.powers,
     prediction: runtime.prediction,
     measuredCop: runtime.measuredCop,
+    hpSchedule: runtime.hpSchedule,
     calibration: {
       enabled: config.calibration.enabled,
       sampleCount: config.calibration.sampleCount,
@@ -252,6 +261,7 @@ async function runPoll() {
       powers,
       prediction,
       measuredCop: measured ? +measured.cop.toFixed(2) : null,
+      hpSchedule: computeHpSchedule(state, nextForecast),
     };
 
     const point = {
@@ -322,6 +332,9 @@ app.get('/api/settings', (_req, res) => {
 
 app.put('/api/settings', (req, res) => {
   mergeConfig(req.body);
+  if (runtime.state) {
+    runtime.hpSchedule = computeHpSchedule(runtime.state, runtime.forecast);
+  }
   if (config.polling.enabled && pollTimer) {
     stopPolling();
     startPolling();
@@ -378,6 +391,7 @@ app.post('/api/recalculate', (req, res) => {
   );
   runtime.powers = powers;
   runtime.prediction = prediction;
+  runtime.hpSchedule = computeHpSchedule(runtime.state, runtime.forecast);
   res.json(buildStatus());
 });
 

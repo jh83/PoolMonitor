@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG = {
   },
   prediction: {
     target: 28,
+    hpMaxTemp: 32,
     volume: 16000,
     flow: 25,
     surface: 15,
@@ -31,6 +32,11 @@ export const DEFAULT_CONFIG = {
       { outdoor: 15, cop: 3.4 },
       { outdoor: 28, cop: 4.2 },
     ],
+    schedule: {
+      enabled: true,
+      readyTime: '10:00',
+      hpOffTime: '20:00',
+    },
   },
   polling: {
     enabled: false,
@@ -146,6 +152,10 @@ export function loadConfig() {
   const config = readJson(CONFIG_PATH, DEFAULT_CONFIG);
   config.entities = { ...DEFAULT_CONFIG.entities, ...config.entities };
   config.prediction = { ...DEFAULT_CONFIG.prediction, ...config.prediction };
+  config.prediction.schedule = {
+    ...DEFAULT_CONFIG.prediction.schedule,
+    ...config.prediction.schedule,
+  };
   if (!Array.isArray(config.prediction.copCurve) || config.prediction.copCurve.length === 0) {
     config.prediction.copCurve = DEFAULT_CONFIG.prediction.copCurve;
   }
