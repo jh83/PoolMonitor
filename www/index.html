@@ -711,6 +711,7 @@
         <input id="p-hp-off-time" type="time" value="20:00" />
       </div>
     </div>
+    <p class="detail tz-hint" id="hp-schedule-tz-hint" style="font-size:12px;color:var(--text2);margin-bottom:10px"></p>
     <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
       Suggested HP start each day to reach target by <strong>Ready by</strong>. Assumes HP runs until
       <strong>HP off</strong> (but not above your <strong>HP off temperature</strong> setting), then cools overnight
@@ -908,7 +909,7 @@
 
         <div class="settings-subgroup lc-mode">
           <h4 class="settings-subgroup-title">Schedule for tonight</h4>
-          <p class="settings-subgroup-hint">Waits until the window starts, then measures until the window ends. Duration above is not used.</p>
+          <p class="settings-subgroup-hint" id="loss-cal-schedule-hint">Waits until the window starts, then measures until the window ends. Duration above is not used.</p>
           <div class="grid-3">
             <div class="field"><label>Window start</label><input id="lc-start" type="time" value="01:00" /></div>
             <div class="field"><label>Window end</label><input id="lc-end" type="time" value="05:00" /></div>
@@ -1352,14 +1353,14 @@
     if (hpOn !== undefined && hpOn !== null && !hpManualBusy) {
       $('p-hp-manual').checked = hpOn === 'on' || hpOn === true;
     }
-    const running = $('p-hp-manual').checked;
-    $('hp-control-bar')?.classList.toggle('is-on', running || auto);
+    const running = hpOn === 'on' || hpOn === true || ($('p-hp-manual').checked && hpOn === undefined);
+    $('hp-control-bar')?.classList.toggle('is-on', running);
     $('hp-manual-toggle-row')?.classList.toggle('is-disabled', auto);
     const hint = $('hp-control-hint');
     if (auto) {
       hint.textContent = running
         ? 'Auto control on — heat pump is running'
-        : 'Auto control on — off until schedule or temperature';
+        : 'Auto control on — off until schedule window and on threshold';
     } else {
       hint.textContent = running
         ? 'Heat pump is running'
@@ -2146,11 +2147,24 @@
     syncChartLegend();
   }
 
+  function updateTimezoneHints(timezone) {
+    const tz = timezone || 'UTC';
+    const hp = $('hp-schedule-tz-hint');
+    if (hp) hp.textContent = `Schedule times use server timezone: ${tz}.`;
+    const lc = $('loss-cal-schedule-hint');
+    if (lc) {
+      lc.textContent =
+        `Window times use server timezone: ${tz}. Waits until the window starts, ` +
+        'then measures until the window ends. Duration above is not used.';
+    }
+  }
+
   async function applyStatus(status) {
     const errEl = $('err-msg');
     const polling = status.polling;
     const state = status.state;
 
+    updateTimezoneHints(status.timezone);
     updateHaCardStatus(polling);
 
     if (polling.enabled) {

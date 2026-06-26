@@ -55,6 +55,22 @@ Settings are saved automatically as you edit them. After you start polling once,
 container keeps polling in the background and resumes after a restart. Use **Stop polling**
 in the same section when you want to pause data collection.
 
+### Time zones
+
+All wall-clock times in the UI (**Ready by**, **HP off**, loss-calibration window, schedule
+table) are interpreted in the **container's local timezone**, not your browser's.
+
+The default Docker image uses **UTC** unless you set `TZ`. That is why a window ending at
+`05:00` can stop at **07:00 CEST** (UTC+2).
+
+`docker-compose.yml` sets `TZ=Europe/Stockholm` by default. Change it to your IANA timezone
+(e.g. `Europe/Berlin`, `Europe/Amsterdam`) or set `TZ` in a `.env` file, then recreate the
+container:
+
+```bash
+docker compose up -d
+```
+
 If HA is not configured yet, the settings modal opens automatically on first visit.
 
 ## Using the dashboard
@@ -162,6 +178,15 @@ switch entity in HA:
   - turns **off** at **target temperature**, **HP on/off — off**, or **HP off** time
 
 Auto control is skipped during loss-coefficient calibration tests.
+
+Each poll logs the auto decision to the container output (`docker compose logs -f`), for example:
+
+```
+[poll] HP auto: pool=27.9°C target=27 on=26 hp=ON window=10:00–20:00 (in window) → OFF: pool 27.9°C >= target 27°C
+[poll] HP auto → OFF (switch.heatpump) — pool 27.9°C >= target 27°C
+```
+
+Turn-off follows target and max thresholds **any time before the evening off time**. Turn-on only happens inside the daily heating window (scheduled start → evening off) when pool temp is below the on threshold.
 
 ### Solar
 

@@ -1,5 +1,16 @@
 import { isPollVerbose, pollVerbose } from './log.js';
 
+export function normalizeSwitchState(value) {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'on' || v === 'true' || v === '1' || v === 'open') return 'on';
+  if (v === 'off' || v === 'false' || v === '0' || v === 'closed') return 'off';
+  return v || 'unknown';
+}
+
+export function isSwitchOn(value) {
+  return normalizeSwitchState(value) === 'on';
+}
+
 export async function haGet(config, entity) {
   const url = config.haUrl.replace(/\/$/, '');
   const res = await fetch(`${url}/api/states/${entity}`, {
@@ -123,7 +134,7 @@ export async function fetchPoolState(config) {
     solar: parseFloat(solarS.state),
     outdoor: parseFloat(outdoorS.state),
     hpPower: parseFloat(hpPwrS.state),
-    hpState: hpStateS.state,
+    hpState: normalizeSwitchState(hpStateS.state),
     wind: 0,
   };
 

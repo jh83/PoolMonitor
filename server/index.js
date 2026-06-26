@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchPoolState, haGet, haSwitchSet } from './ha.js';
+import { fetchPoolState, haGet, haSwitchSet, isSwitchOn, normalizeSwitchState } from './ha.js';
 import { pollError, pollLog, pollVerbose } from './log.js';
 import {
   buildHpSchedule,
@@ -68,6 +68,13 @@ function mergeConfig(updates) {
     calibration: { ...config.calibration, ...updates.calibration },
   };
 
+  if (updates.prediction?.schedule) {
+    config.prediction.schedule = {
+      ...config.prediction.schedule,
+      ...updates.prediction.schedule,
+    };
+  }
+
   if (updates.prediction?.copCurve && config.calibration?.learned) {
     const anchors = (curve) => curve.map((p) => p.outdoor).sort((a, b) => a - b).join(',');
     if (anchors(config.prediction.copCurve) !== anchors(config.calibration.learned)) {
@@ -99,6 +106,63 @@ function parseHHMM(value) {
   const [h, m] = (value || '').split(':').map(Number);
   if (!isFinite(h) || !isFinite(m)) return null;
   return h * 60 + m;
+}
+
+function formatHHMM(minutes) {
+  if (minutes == null || !isFinite(minutes)) return '—';
+  const h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function evaluateHpAutoDecision(prediction, poolTemp, hpOn, window) {
+  const { inWindow, pastOffTime, hpOffMin, windowStartMin } = window;
+  const target = prediction.target;
+  const hpMin = effectiveHpMinTemp(prediction);
+  const hpMax = prediction.hpMaxTemp;
+
+  if (pastOffTime) {
+    return hpOn
+      ? { action: 'off', reason: 'evening cutoff' }
+      : { action: 'hold', reason: 'past evening off, already off' };
+  }
+
+  if (hpOn) {
+    if (!isHpHeatingAllowed(prediction, poolTemp)) {
+      return {
+        action: 'off',
+        reason: `pool ${poolTemp.toFixed(1)}°C at or above HP max (${hpMax}°C)`,
+      };
+    }
+    if (target != null && isFinite(target) && poolTemp >= target) {
+      return {
+        action: 'off',
+        reason: `pool ${poolTemp.toFixed(1)}°C >= target ${target}°C`,
+      };
+    }
+  } else if (inWindow && hpMin != null && poolTemp < hpMin) {
+    return {
+      action: 'on',
+      reason: `pool ${poolTemp.toFixed(1)}°C below on threshold ${hpMin}°C`,
+    };
+  }
+
+  if (!hpOn && !inWindow) {
+    return {
+      action: 'hold',
+      reason: `outside heating window (${formatHHMM(windowStartMin)}–${formatHHMM(hpOffMin)})`,
+    };
+  }
+  if (!hpOn && hpMin != null && poolTemp >= hpMin) {
+    return {
+      action: 'hold',
+      reason: `pool ${poolTemp.toFixed(1)}°C at or above on threshold ${hpMin}°C`,
+    };
+  }
+  if (hpOn) {
+    return { action: 'hold', reason: 'heating in progress' };
+  }
+  return { action: 'hold', reason: 'no change needed' };
 }
 
 function isWithinSchedule(schedule, now = new Date()) {
@@ -231,57 +295,49 @@ async function handleHpAutoControl(state, hpSchedule, now = new Date()) {
   if (!runtime.hpAuto) runtime.hpAuto = defaultHpAuto();
 
   const todayStr = toDateStr(now);
-  const { hpOffMin, inWindow, pastOffTime } = resolveHpAutoWindow(hpSchedule, schedule, todayStr, now);
-  if (hpOffMin == null) return;
+  const window = resolveHpAutoWindow(hpSchedule, schedule, todayStr, now);
+  if (window.hpOffMin == null) return;
 
   const entity = config.entities.hpState.trim();
-  const hpOn = state.hpState === 'on';
-  const target = prediction.target;
+  const hpOn = isSwitchOn(state.hpState);
   const hpMin = effectiveHpMinTemp(prediction);
+  const decision = evaluateHpAutoDecision(prediction, poolTemp, hpOn, window);
+  const windowLabel = `${formatHHMM(window.windowStartMin)}–${formatHHMM(window.hpOffMin)}`;
+  const windowState = window.pastOffTime ? 'past off' : (window.inWindow ? 'in window' : 'before window');
 
-  const recordAction = (action, detail) => {
-    runtime.hpAuto.lastAction = action;
-    runtime.hpAuto.lastActionAt = now.toISOString();
-    runtime.hpAuto.lastError = null;
-    if (action === 'off' && pastOffTime) runtime.hpAuto.lastOffDate = todayStr;
-    pollLog(`HP auto → ${action.toUpperCase()} (${entity})${detail ? ` — ${detail}` : ''}`);
-  };
+  pollLog(
+    `HP auto: pool=${poolTemp.toFixed(1)}°C target=${prediction.target} on=${hpMin} ` +
+    `hp=${hpOn ? 'ON' : 'OFF'} window=${windowLabel} (${windowState}) → ` +
+    `${decision.action.toUpperCase()}: ${decision.reason}`,
+  );
+
+  if (decision.action === 'hold') return;
 
   try {
-    if (pastOffTime) {
-      if (hpOn) {
-        await haSwitchSet(config, entity, false);
-        recordAction('off', 'evening cutoff');
-      }
-      return;
-    }
+    const turnOn = decision.action === 'on';
+    await haSwitchSet(config, entity, turnOn);
+    state.hpState = turnOn ? 'on' : 'off';
+    if (runtime.state) runtime.state.hpState = state.hpState;
 
-    if (!inWindow) return;
+    runtime.hpAuto.lastAction = decision.action;
+    runtime.hpAuto.lastActionAt = now.toISOString();
+    runtime.hpAuto.lastError = null;
+    if (decision.action === 'off' && window.pastOffTime) runtime.hpAuto.lastOffDate = todayStr;
 
-    if (hpOn && !isHpHeatingAllowed(prediction, poolTemp)) {
-      await haSwitchSet(config, entity, false);
-      recordAction('off', `pool ${poolTemp.toFixed(1)}°C at HP max`);
-      return;
-    }
-
-    if (hpOn && target != null && isFinite(target) && poolTemp >= target) {
-      await haSwitchSet(config, entity, false);
-      recordAction('off', `pool ${poolTemp.toFixed(1)}°C >= target ${target}°C`);
-      return;
-    }
-
-    if (!hpOn && hpMin != null && poolTemp < hpMin) {
-      await haSwitchSet(config, entity, true);
-      recordAction('on', `pool ${poolTemp.toFixed(1)}°C < on threshold ${hpMin}°C`);
-    }
+    pollLog(`HP auto → ${decision.action.toUpperCase()} (${entity}) — ${decision.reason}`);
   } catch (err) {
     runtime.hpAuto.lastError = err.message;
     pollError(`HP auto FAIL ${err.message}`);
   }
 }
 
+function serverTimezone() {
+  return process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
 function buildStatus() {
   return {
+    timezone: serverTimezone(),
     polling: {
       enabled: config.polling.enabled,
       intervalMs: config.polling.intervalMs,
@@ -502,7 +558,7 @@ app.post('/api/hp/set', async (req, res) => {
     await haSwitchSet(config, entity, on);
     const hpStateS = await haGet(config, entity);
     if (runtime.state) {
-      runtime.state.hpState = hpStateS.state;
+      runtime.state.hpState = normalizeSwitchState(hpStateS.state);
     }
     pollLog(`HP manual → ${on ? 'ON' : 'OFF'} (${entity})`);
     res.json(buildStatus());

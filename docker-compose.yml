@@ -7,6 +7,10 @@ services:
       - "8088:8088"
     volumes:
       - pool-dashboard-data:/data
+    environment:
+      # Schedule times (Ready by, HP off, loss-cal window) use this timezone.
+      # Override in a .env file or here, e.g. TZ=Europe/Berlin
+      - TZ=${TZ:-Europe/Stockholm}
 
 volumes:
   pool-dashboard-data:
