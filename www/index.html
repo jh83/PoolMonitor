@@ -271,6 +271,55 @@
     .schedule-header h2 { margin-bottom: 0; }
     .schedule-header .field { min-width: 140px; margin: 0; }
     .schedule-times { display: flex; gap: 12px; flex-wrap: wrap; }
+    .schedule-mode {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--text2);
+    }
+    .schedule-mode label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .schedule-weekdays {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    .schedule-weekdays th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0 8px 6px 0;
+    }
+    .schedule-weekdays td {
+      padding: 4px 8px 4px 0;
+      vertical-align: middle;
+    }
+    .schedule-weekdays td:first-child {
+      width: 88px;
+      color: var(--text2);
+      font-size: 12px;
+    }
+    .schedule-weekdays input[type="time"] {
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius-md);
+      background: var(--surface2);
+      color: var(--text);
+      width: 100%;
+      min-width: 110px;
+    }
     .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .schedule-table th {
       text-align: left;
@@ -701,7 +750,11 @@
 
   <div class="hp-section">
     <div class="divider" style="margin-top:0">Schedule</div>
-    <div class="schedule-times" style="margin-bottom:8px">
+    <div class="schedule-mode">
+      <label><input type="radio" name="p-schedule-mode" id="p-schedule-same" value="same" checked /> Same every day</label>
+      <label><input type="radio" name="p-schedule-mode" id="p-schedule-weekly" value="weekly" /> Custom per weekday</label>
+    </div>
+    <div id="schedule-same-panel" class="schedule-times" style="margin-bottom:8px">
       <div class="field" style="min-width:140px">
         <label>Ready by</label>
         <input id="p-ready-time" type="time" value="10:00" />
@@ -710,6 +763,22 @@
         <label>HP off (evening)</label>
         <input id="p-hp-off-time" type="time" value="20:00" />
       </div>
+    </div>
+    <div id="schedule-weekly-panel" hidden style="margin-bottom:8px">
+      <table class="schedule-weekdays">
+        <thead>
+          <tr><th>Day</th><th>Ready by</th><th>HP off</th></tr>
+        </thead>
+        <tbody>
+          <tr data-dow="1"><td>Monday</td><td><input class="p-ready-weekday" data-dow="1" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="1" type="time" value="20:00" /></td></tr>
+          <tr data-dow="2"><td>Tuesday</td><td><input class="p-ready-weekday" data-dow="2" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="2" type="time" value="20:00" /></td></tr>
+          <tr data-dow="3"><td>Wednesday</td><td><input class="p-ready-weekday" data-dow="3" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="3" type="time" value="20:00" /></td></tr>
+          <tr data-dow="4"><td>Thursday</td><td><input class="p-ready-weekday" data-dow="4" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="4" type="time" value="20:00" /></td></tr>
+          <tr data-dow="5"><td>Friday</td><td><input class="p-ready-weekday" data-dow="5" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="5" type="time" value="20:00" /></td></tr>
+          <tr data-dow="6"><td>Saturday</td><td><input class="p-ready-weekday" data-dow="6" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="6" type="time" value="20:00" /></td></tr>
+          <tr data-dow="0"><td>Sunday</td><td><input class="p-ready-weekday" data-dow="0" type="time" value="10:00" /></td><td><input class="p-off-weekday" data-dow="0" type="time" value="20:00" /></td></tr>
+        </tbody>
+      </table>
     </div>
     <p class="detail tz-hint" id="hp-schedule-tz-hint" style="font-size:12px;color:var(--text2);margin-bottom:10px"></p>
     <p class="detail" style="font-size:12px;color:var(--text2);margin-bottom:10px">
@@ -1106,6 +1175,65 @@
   const fmt = (v, d = 1) => v == null || isNaN(v) ? '—' : (+v).toFixed(d);
   const fmtTemp = v => fmt(v, 2);
 
+  const WEEKDAY_LABELS = {
+    0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat',
+  };
+
+  function readWeekDaysFromForm() {
+    const days = {};
+    for (let dow = 0; dow < 7; dow++) {
+      days[dow] = {
+        readyTime: document.querySelector(`.p-ready-weekday[data-dow="${dow}"]`)?.value || '10:00',
+        hpOffTime: document.querySelector(`.p-off-weekday[data-dow="${dow}"]`)?.value || '20:00',
+      };
+    }
+    return days;
+  }
+
+  function applyWeekDaysToForm(weekDays, fallbackReady = '10:00', fallbackOff = '20:00') {
+    for (let dow = 0; dow < 7; dow++) {
+      const day = weekDays?.[dow] ?? weekDays?.[String(dow)] ?? {};
+      const readyEl = document.querySelector(`.p-ready-weekday[data-dow="${dow}"]`);
+      const offEl = document.querySelector(`.p-off-weekday[data-dow="${dow}"]`);
+      if (readyEl) readyEl.value = day.readyTime || fallbackReady;
+      if (offEl) offEl.value = day.hpOffTime || fallbackOff;
+    }
+  }
+
+  function copySameScheduleToWeekdays() {
+    const ready = $('p-ready-time').value || '10:00';
+    const off = $('p-hp-off-time').value || '20:00';
+    applyWeekDaysToForm(readWeekDaysFromForm(), ready, off);
+    for (let dow = 0; dow < 7; dow++) {
+      const readyEl = document.querySelector(`.p-ready-weekday[data-dow="${dow}"]`);
+      const offEl = document.querySelector(`.p-off-weekday[data-dow="${dow}"]`);
+      if (readyEl) readyEl.value = ready;
+      if (offEl) offEl.value = off;
+    }
+  }
+
+  function syncScheduleModeUi() {
+    const weekly = $('p-schedule-weekly').checked;
+    $('schedule-same-panel').hidden = weekly;
+    $('schedule-weekly-panel').hidden = !weekly;
+  }
+
+  function todayScheduleTimesFromForm() {
+    const weekly = $('p-schedule-weekly').checked;
+    const dow = new Date().getDay();
+    if (weekly) {
+      const days = readWeekDaysFromForm();
+      return {
+        ready: days[dow]?.readyTime || '10:00',
+        off: days[dow]?.hpOffTime || '20:00',
+      };
+    }
+    return {
+      ready: $('p-ready-time').value || '10:00',
+      off: $('p-hp-off-time').value || '20:00',
+    };
+  }
+
   const FIELD_IDS = [
     'ha-url', 'ha-token',
     'e-pool-temp', 'e-outlet1', 'e-outlet2', 'e-solar', 'e-outdoor', 'e-hp-power', 'e-hp-state', 'e-weather',
@@ -1151,6 +1279,13 @@
   }
 
   function readSettingsFromForm() {
+    const readyTime = $('p-ready-time').value || '10:00';
+    const hpOffTime = $('p-hp-off-time').value || '20:00';
+    const weekly = $('p-schedule-weekly').checked;
+    const weekDays = weekly
+      ? readWeekDaysFromForm()
+      : Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((dow) => [dow, { readyTime, hpOffTime }]));
+
     return {
       haUrl: $('ha-url').value.trim(),
       haToken: $('ha-token').value.trim(),
@@ -1178,8 +1313,10 @@
         copCurve: readCopCurveFromForm(),
         schedule: {
           enabled: true,
-          readyTime: $('p-ready-time').value || '10:00',
-          hpOffTime: $('p-hp-off-time').value || '20:00',
+          weekly,
+          readyTime,
+          hpOffTime,
+          weekDays,
           autoControl: $('p-hp-auto').checked,
         },
       },
@@ -1210,6 +1347,14 @@
     $('p-hp-rated-kw').value = settings.prediction?.hpRatedKw ?? 1.5;
     $('p-ready-time').value = settings.prediction?.schedule?.readyTime ?? '10:00';
     $('p-hp-off-time').value = settings.prediction?.schedule?.hpOffTime ?? '20:00';
+    $('p-schedule-weekly').checked = settings.prediction?.schedule?.weekly === true;
+    $('p-schedule-same').checked = !settings.prediction?.schedule?.weekly;
+    applyWeekDaysToForm(
+      settings.prediction?.schedule?.weekDays,
+      settings.prediction?.schedule?.readyTime ?? '10:00',
+      settings.prediction?.schedule?.hpOffTime ?? '20:00',
+    );
+    syncScheduleModeUi();
     $('p-hp-auto').checked = settings.prediction?.schedule?.autoControl ?? false;
     syncHpControlUi();
     renderCopRows(settings.prediction?.copCurve);
@@ -1297,11 +1442,12 @@
     const target = num('p-target');
     const hpMin = num('p-hp-min');
     const hpMax = num('p-hp-max');
-    const ready = $('p-ready-time').value || '10:00';
-    const hpOff = $('p-hp-off-time').value || '20:00';
+    const { ready, off } = todayScheduleTimesFromForm();
+    const weekly = $('p-schedule-weekly').checked;
+    const scheduleLabel = weekly ? 'weekly schedule' : `${ready}–${off}`;
     const auto = $('p-hp-auto').checked ? 'auto on' : 'manual';
     el.textContent =
-      `${fmtTemp(target)}°C target · on ${fmtTemp(hpMin)}°C · off ${fmtTemp(hpMax)}°C · ${ready}–${hpOff} · ${auto}`;
+      `${fmtTemp(target)}°C target · on ${fmtTemp(hpMin)}°C · off ${fmtTemp(hpMax)}°C · ${scheduleLabel} · ${auto}`;
   }
 
   function updateAllSummaries() {
@@ -1339,6 +1485,24 @@
     syncHpControlUi();
     ['p-target', 'p-hp-min', 'p-hp-max', 'p-ready-time', 'p-hp-off-time'].forEach((id) => {
       $(id).addEventListener('input', updateHpCardSummary);
+    });
+    document.querySelectorAll('.p-ready-weekday, .p-off-weekday').forEach((el) => {
+      el.addEventListener('input', updateHpCardSummary);
+    });
+    $('p-schedule-same').addEventListener('change', () => {
+      if ($('p-schedule-same').checked) {
+        syncScheduleModeUi();
+        updateHpCardSummary();
+        scheduleSave();
+      }
+    });
+    $('p-schedule-weekly').addEventListener('change', () => {
+      if ($('p-schedule-weekly').checked) {
+        copySameScheduleToWeekdays();
+        syncScheduleModeUi();
+        updateHpCardSummary();
+        scheduleSave();
+      }
     });
   }
 
@@ -1448,8 +1612,12 @@
         ? `<div class="schedule-muted">from ${fmtTemp(day.poolTempAtStart)}°C</div>`
         : '';
 
+      const dowLabel = hpSchedule.weekly && day.date
+        ? WEEKDAY_LABELS[new Date(`${day.date}T12:00:00`).getDay()]
+        : null;
+
       return `<tr>
-        <td><strong>${day.label}</strong>${startTemp}</td>
+        <td><strong>${day.label}</strong>${dowLabel && day.label !== dowLabel ? `<div class="schedule-muted">${dowLabel}</div>` : ''}${startTemp}</td>
         <td>${startCell}</td>
         <td>${day.readyTime}</td>
         <td>${day.hpOffTime || hpSchedule.hpOffTime || '—'}</td>
@@ -1493,6 +1661,9 @@
 
   function bindAutoSave() {
     FIELD_IDS.forEach(id => $(id).addEventListener('input', scheduleSave));
+    document.querySelectorAll('.p-ready-weekday, .p-off-weekday').forEach((el) => {
+      el.addEventListener('input', scheduleSave);
+    });
     $('p-autocal').addEventListener('change', scheduleSave);
     $('p-hp-auto').addEventListener('change', () => {
       syncHpControlUi();

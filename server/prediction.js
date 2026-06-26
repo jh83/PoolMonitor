@@ -397,6 +397,76 @@ function resolveHpOffMin(readyMin, hpOffMin) {
   return hpOffMin;
 }
 
+export const WEEKDAY_LABELS = {
+  0: 'Sunday',
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+};
+
+/** Monday → Sunday display order (JS getDay: 0 = Sunday). */
+export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+export function dayOfWeekFromDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+export function defaultWeekDays(readyTime = '10:00', hpOffTime = '20:00') {
+  const days = {};
+  for (let dow = 0; dow < 7; dow++) {
+    days[dow] = { readyTime, hpOffTime };
+  }
+  return days;
+}
+
+export function normalizeScheduleConfig(scheduleConfig) {
+  const readyTime = scheduleConfig?.readyTime ?? '10:00';
+  const hpOffTime = scheduleConfig?.hpOffTime ?? '20:00';
+  const weekly = scheduleConfig?.weekly === true;
+  const weekDays = { ...defaultWeekDays(readyTime, hpOffTime) };
+  const raw = scheduleConfig?.weekDays;
+  if (raw && typeof raw === 'object') {
+    for (const key of Object.keys(raw)) {
+      const dow = Number(key);
+      if (!Number.isInteger(dow) || dow < 0 || dow > 6) continue;
+      weekDays[dow] = {
+        readyTime: raw[key]?.readyTime ?? readyTime,
+        hpOffTime: raw[key]?.hpOffTime ?? hpOffTime,
+      };
+    }
+  }
+  return {
+    ...scheduleConfig,
+    readyTime,
+    hpOffTime,
+    weekly,
+    weekDays,
+  };
+}
+
+export function resolveDaySchedule(scheduleConfig, dateOrDateStr) {
+  const schedule = normalizeScheduleConfig(scheduleConfig);
+  const dow = typeof dateOrDateStr === 'string'
+    ? dayOfWeekFromDateStr(dateOrDateStr)
+    : dateOrDateStr.getDay();
+  const times = schedule.weekly
+    ? schedule.weekDays[dow]
+    : { readyTime: schedule.readyTime, hpOffTime: schedule.hpOffTime };
+  const readyMin = parseHHMM(times.readyTime);
+  const hpOffMin = resolveHpOffMin(readyMin, parseHHMM(times.hpOffTime));
+  return {
+    readyTime: times.readyTime,
+    hpOffTime: formatHHMM(hpOffMin),
+    readyMin,
+    hpOffMin,
+    dayOfWeek: dow,
+  };
+}
+
 /** HP on from morning start until evening shutoff (includes heating through ready time). */
 function hpOnUntilEvening(startMin, hpOffMin) {
   return (m) => m >= startMin && m < hpOffMin;
@@ -411,15 +481,19 @@ export function effectiveHpRatedW(prediction, state = null) {
 }
 
 export function buildHpSchedule(prediction, state, forecast, scheduleConfig, now = new Date()) {
-  const readyTime = scheduleConfig?.readyTime ?? '10:00';
-  const hpOffTime = scheduleConfig?.hpOffTime ?? '20:00';
-  const readyMin = parseHHMM(readyTime);
-  const hpOffMin = resolveHpOffMin(readyMin, parseHHMM(hpOffTime));
-  if (readyMin == null || !isFinite(state?.poolTemp)) {
-    return { enabled: scheduleConfig?.enabled !== false, readyTime, hpOffTime, days: [] };
+  const schedule = normalizeScheduleConfig(scheduleConfig);
+  const defaultDay = resolveDaySchedule(schedule, now);
+  if (defaultDay.readyMin == null || !isFinite(state?.poolTemp)) {
+    return {
+      enabled: schedule.enabled !== false,
+      weekly: schedule.weekly,
+      readyTime: schedule.readyTime,
+      hpOffTime: schedule.hpOffTime,
+      days: [],
+    };
   }
 
-  const enabled = scheduleConfig?.enabled !== false;
+  const enabled = schedule.enabled !== false;
   const hpPowerW = effectiveHpRatedW(prediction, state);
   const todayStr = toDateStrLocal(now);
   const tomorrow = new Date(now);
@@ -438,6 +512,9 @@ export function buildHpSchedule(prediction, state, forecast, scheduleConfig, now
   const results = [];
 
   for (const dateStr of days) {
+    const { readyMin, hpOffMin } = resolveDaySchedule(schedule, dateStr);
+    if (readyMin == null) continue;
+
     const isToday = dateStr === todayStr;
     const simFromMin = isToday ? nowMin : 0;
 
@@ -535,8 +612,9 @@ export function buildHpSchedule(prediction, state, forecast, scheduleConfig, now
 
   return {
     enabled,
-    readyTime,
-    hpOffTime: formatHHMM(hpOffMin),
+    weekly: schedule.weekly,
+    readyTime: schedule.readyTime,
+    hpOffTime: defaultDay.hpOffTime,
     days: results,
   };
 }

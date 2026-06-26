@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { normalizeScheduleConfig } from './prediction.js';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
@@ -36,8 +37,10 @@ export const DEFAULT_CONFIG = {
     ],
     schedule: {
       enabled: true,
+      weekly: false,
       readyTime: '10:00',
       hpOffTime: '20:00',
+      weekDays: null,
       autoControl: false,
     },
   },
@@ -162,10 +165,10 @@ export function loadConfig() {
   const config = readJson(CONFIG_PATH, DEFAULT_CONFIG);
   config.entities = { ...DEFAULT_CONFIG.entities, ...config.entities };
   config.prediction = { ...DEFAULT_CONFIG.prediction, ...config.prediction };
-  config.prediction.schedule = {
+  config.prediction.schedule = normalizeScheduleConfig({
     ...DEFAULT_CONFIG.prediction.schedule,
     ...config.prediction.schedule,
-  };
+  });
   if (!Array.isArray(config.prediction.copCurve) || config.prediction.copCurve.length === 0) {
     config.prediction.copCurve = DEFAULT_CONFIG.prediction.copCurve;
   }

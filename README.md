@@ -153,12 +153,16 @@ heating data (shown as **Measured COP** on the dashboard).
 
 ### Daily heat pump schedule
 
-The **Heat pump** card on the main page plans heating for today and upcoming forecast days:
+The **Heat pump** card on the main page plans heating for today and upcoming forecast days.
+
+Choose **Same every day** for one **Ready by** / **HP off** pair, or **Custom per weekday**
+to set different times for Monday through Sunday. The forecast table uses each day's own
+times when weekly mode is enabled. Auto control also follows the current day's schedule.
 
 | Setting | Purpose |
 |---|---|
-| **Ready by** | Target time to reach pool temperature each day |
-| **HP off (evening)** | Latest time the heat pump may run |
+| **Ready by** | Target time to reach pool temperature that day |
+| **HP off (evening)** | Latest time the heat pump may run that day |
 | **Target temperature** | Desired pool temperature (prediction and auto-off) |
 | **HP on/off temperature — on** | Auto-control turns the HP on when pool temp drops below this |
 | **HP on/off temperature — off** | Heating stops at or above this (auto control and schedule simulation) |

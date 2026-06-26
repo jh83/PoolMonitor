@@ -13,6 +13,8 @@ import {
   isSolarActive,
   isHpHeatingAllowed,
   effectiveHpMinTemp,
+  resolveDaySchedule,
+  normalizeScheduleConfig,
 } from './prediction.js';
 import {
   appendHistoryPoint,
@@ -73,6 +75,13 @@ function mergeConfig(updates) {
       ...config.prediction.schedule,
       ...updates.prediction.schedule,
     };
+    if (updates.prediction.schedule.weekDays) {
+      config.prediction.schedule.weekDays = {
+        ...config.prediction.schedule.weekDays,
+        ...updates.prediction.schedule.weekDays,
+      };
+    }
+    config.prediction.schedule = normalizeScheduleConfig(config.prediction.schedule);
   }
 
   if (updates.prediction?.copCurve && config.calibration?.learned) {
@@ -265,8 +274,8 @@ function defaultHpAuto() {
 }
 
 function resolveHpAutoWindow(hpSchedule, schedule, todayStr, now) {
-  const hpOffMin = parseHHMM(hpSchedule?.hpOffTime ?? schedule.hpOffTime);
-  const readyMin = parseHHMM(hpSchedule?.readyTime ?? schedule.readyTime) ?? 0;
+  const daySchedule = resolveDaySchedule(schedule, todayStr);
+  const { readyMin, hpOffMin } = daySchedule;
   const todayEntry = hpSchedule?.days?.find((d) => d.date === todayStr);
   let windowStartMin = readyMin;
   if (todayEntry?.hpStart) {
@@ -277,7 +286,10 @@ function resolveHpAutoWindow(hpSchedule, schedule, todayStr, now) {
   return {
     hpOffMin,
     windowStartMin,
-    inWindow: hpOffMin != null && nowMin >= windowStartMin && nowMin < hpOffMin,
+    readyMin,
+    readyTime: daySchedule.readyTime,
+    hpOffTime: daySchedule.hpOffTime,
+    inWindow: hpOffMin != null && readyMin != null && nowMin >= windowStartMin && nowMin < hpOffMin,
     pastOffTime: hpOffMin != null && nowMin >= hpOffMin,
   };
 }
