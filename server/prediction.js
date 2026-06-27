@@ -472,6 +472,65 @@ function hpOnUntilEvening(startMin, hpOffMin) {
   return (m) => m >= startMin && m < hpOffMin;
 }
 
+/** Prediction curve that respects today's HP schedule (start → evening off). */
+export function buildScheduledPrediction(prediction, startTemp, state, forecast, scheduleConfig, now = new Date()) {
+  if (scheduleConfig?.enabled === false) {
+    return buildPrediction(prediction, startTemp, state, forecast);
+  }
+
+  const target = prediction.target;
+  if (startTemp >= target) return { minutes: 0, curve: [] };
+
+  const todayStr = toDateStrLocal(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const { readyMin, hpOffMin } = resolveDaySchedule(scheduleConfig, todayStr);
+  if (readyMin == null || hpOffMin == null) {
+    return buildPrediction(prediction, startTemp, state, forecast);
+  }
+
+  const hpPowerW = effectiveHpRatedW(prediction, state);
+  let hpStartMin = null;
+
+  if (nowMin >= hpOffMin) {
+    return buildPrediction(prediction, startTemp, state, forecast);
+  }
+
+  if (nowMin >= readyMin) {
+    hpStartMin = nowMin;
+  } else {
+    const found = findLatestHpStart(
+      prediction, startTemp, todayStr, nowMin, readyMin, forecast, hpPowerW,
+    );
+    if (!found) {
+      return buildPrediction(prediction, startTemp, state, forecast);
+    }
+    if (found.alreadyAtTarget) return { minutes: 0, curve: [] };
+    hpStartMin = found.startMin;
+  }
+
+  const hpOnFn = hpOnUntilEvening(hpStartMin, hpOffMin);
+  const curve = [];
+  let temp = startTemp;
+  const mass = prediction.volume;
+  const stepMin = SCHEDULE_STEP_MIN;
+
+  for (let m = nowMin; m < 24 * 60; m += stepMin) {
+    const atMs = dateAtMinute(todayStr, m).getTime();
+    const fc = forecastAt(forecast, atMs);
+    const outdoor = +fc.temperature;
+    const wind = fc.wind_speed || 0;
+    const solarW = plannedSolarW(prediction, forecast, atMs);
+    const hpOn = hpOnFn(m) && isHpHeatingAllowed(prediction, temp);
+    const { net } = plannedNetPower(prediction, temp, outdoor, wind, solarW, hpOn, hpPowerW);
+    temp = Math.min(temp + (net * stepMin * 60) / (mass * WATER_CP), 45);
+    curve.push({ t: m - nowMin + stepMin, temp: +temp.toFixed(2) });
+    if (temp >= target) break;
+  }
+
+  const reached = curve.find((p) => p.temp >= target);
+  return { minutes: reached ? reached.t : null, curve };
+}
+
 export function effectiveHpRatedW(prediction, state = null) {
   const kw = prediction.hpRatedKw;
   if (kw != null && isFinite(kw) && kw > 0) return kw * 1000;
@@ -519,21 +578,67 @@ export function buildHpSchedule(prediction, state, forecast, scheduleConfig, now
     const simFromMin = isToday ? nowMin : 0;
 
     if (isToday && nowMin >= readyMin) {
-      const hpOnFn = (m) => m >= nowMin && m < hpOffMin;
-      carryTemp = simulateTemp(
-        prediction, carryTemp, nowMin, 24 * 60, dateStr, forecast, hpOnFn, hpPowerW,
-      );
+      const startTemp = carryTemp;
+
+      if (startTemp >= prediction.target) {
+        carryTemp = simulateTemp(
+          prediction, startTemp, simFromMin, 24 * 60, dateStr, forecast, () => false, hpPowerW,
+        );
+        results.push({
+          date: dateStr,
+          label: 'Today',
+          status: 'at_target',
+          hpStart: null,
+          readyTime: formatHHMM(readyMin),
+          hpOffTime: formatHHMM(hpOffMin),
+          projectedTemp: startTemp,
+          poolTempAtStart: startTemp,
+          poolTempAtOff: carryTemp,
+          hpKwh: 0,
+          message: 'Already at target',
+        });
+        continue;
+      }
+
+      if (nowMin >= hpOffMin) {
+        carryTemp = simulateTemp(
+          prediction, startTemp, simFromMin, 24 * 60, dateStr, forecast, () => false, hpPowerW,
+        );
+        results.push({
+          date: dateStr,
+          label: 'Today',
+          status: 'past',
+          message: 'Heating window ended',
+          readyTime: formatHHMM(readyMin),
+          hpOffTime: formatHHMM(hpOffMin),
+          poolTempAtStart: startTemp,
+          poolTempAtOff: carryTemp,
+          hpKwh: 0,
+        });
+        continue;
+      }
+
+      const hpStartMin = nowMin;
+      const hpOnFn = hpOnUntilEvening(hpStartMin, hpOffMin);
       const hpKwh = computeHpElectricalKwh(
-        prediction, carryTemp, nowMin, 24 * 60, dateStr, forecast, hpOnFn, hpPowerW,
+        prediction, startTemp, nowMin, 24 * 60, dateStr, forecast, hpOnFn, hpPowerW,
+      );
+      carryTemp = simulateTemp(
+        prediction, startTemp, nowMin, 24 * 60, dateStr, forecast, hpOnFn, hpPowerW,
       );
       results.push({
         date: dateStr,
         label: 'Today',
-        status: 'past',
-        message: 'Ready time already passed',
+        status: 'active',
+        hpStart: formatHHMM(hpStartMin),
         readyTime: formatHHMM(readyMin),
         hpOffTime: formatHHMM(hpOffMin),
+        projectedTemp: carryTemp,
+        poolTempAtStart: startTemp,
+        poolTempAtOff: carryTemp,
+        heatingMinutes: hpOffMin - hpStartMin,
         hpKwh,
+        message: 'Ready time passed — heating now',
       });
       continue;
     }

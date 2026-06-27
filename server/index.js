@@ -6,6 +6,7 @@ import { pollError, pollLog, pollVerbose } from './log.js';
 import {
   buildHpSchedule,
   buildPrediction,
+  buildScheduledPrediction,
   calcNetPower,
   calibrateCurve,
   computeLossCoefficient,
@@ -276,20 +277,26 @@ function defaultHpAuto() {
 function resolveHpAutoWindow(hpSchedule, schedule, todayStr, now) {
   const daySchedule = resolveDaySchedule(schedule, todayStr);
   const { readyMin, hpOffMin } = daySchedule;
+  const nowMin = minutesOfDay(now);
   const todayEntry = hpSchedule?.days?.find((d) => d.date === todayStr);
+  const pastReady = readyMin != null && nowMin >= readyMin;
+  const beforeOff = hpOffMin != null && nowMin < hpOffMin;
+
   let windowStartMin = readyMin;
   if (todayEntry?.hpStart) {
     const startMin = parseHHMM(todayEntry.hpStart);
     if (startMin != null) windowStartMin = startMin;
+  } else if (pastReady && beforeOff) {
+    windowStartMin = nowMin;
   }
-  const nowMin = minutesOfDay(now);
+
   return {
     hpOffMin,
     windowStartMin,
     readyMin,
     readyTime: daySchedule.readyTime,
     hpOffTime: daySchedule.hpOffTime,
-    inWindow: hpOffMin != null && readyMin != null && nowMin >= windowStartMin && nowMin < hpOffMin,
+    inWindow: beforeOff && (pastReady || (windowStartMin != null && nowMin >= windowStartMin)),
     pastOffTime: hpOffMin != null && nowMin >= hpOffMin,
   };
 }
@@ -423,7 +430,9 @@ async function runPoll() {
 
     const pred = effectivePrediction();
     const powers = calcNetPower(pred, state);
-    const prediction = buildPrediction(pred, state.poolTemp, state, forecast);
+    const prediction = buildScheduledPrediction(
+      pred, state.poolTemp, state, forecast, pred.schedule, new Date(),
+    );
 
     const nextForecast = forecast?.length ? forecast : runtime.forecast;
     const hpSchedule = computeHpSchedule(state, nextForecast);
@@ -593,11 +602,13 @@ app.post('/api/recalculate', (req, res) => {
   }
   const pred = effectivePrediction();
   const powers = calcNetPower(pred, runtime.state);
-  const prediction = buildPrediction(
+  const prediction = buildScheduledPrediction(
     pred,
     runtime.state.poolTemp,
     runtime.state,
     runtime.forecast,
+    pred.schedule,
+    new Date(),
   );
   runtime.powers = powers;
   runtime.prediction = prediction;

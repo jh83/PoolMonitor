@@ -271,6 +271,10 @@
     .schedule-header h2 { margin-bottom: 0; }
     .schedule-header .field { min-width: 140px; margin: 0; }
     .schedule-times { display: flex; gap: 12px; flex-wrap: wrap; }
+    #schedule-same-panel[hidden],
+    #schedule-weekly-panel[hidden] {
+      display: none !important;
+    }
     .schedule-mode {
       display: flex;
       gap: 16px;
@@ -1214,8 +1218,10 @@
 
   function syncScheduleModeUi() {
     const weekly = $('p-schedule-weekly').checked;
-    $('schedule-same-panel').hidden = weekly;
-    $('schedule-weekly-panel').hidden = !weekly;
+    const samePanel = $('schedule-same-panel');
+    const weeklyPanel = $('schedule-weekly-panel');
+    if (samePanel) samePanel.hidden = weekly;
+    if (weeklyPanel) weeklyPanel.hidden = !weekly;
   }
 
   function todayScheduleTimesFromForm() {
@@ -1481,6 +1487,7 @@
   }
 
   function initDashboardInputs() {
+    syncScheduleModeUi();
     updateHpCardSummary();
     syncHpControlUi();
     ['p-target', 'p-hp-min', 'p-hp-max', 'p-ready-time', 'p-hp-off-time'].forEach((id) => {
@@ -1490,19 +1497,15 @@
       el.addEventListener('input', updateHpCardSummary);
     });
     $('p-schedule-same').addEventListener('change', () => {
-      if ($('p-schedule-same').checked) {
-        syncScheduleModeUi();
-        updateHpCardSummary();
-        scheduleSave();
-      }
+      syncScheduleModeUi();
+      updateHpCardSummary();
+      scheduleSave();
     });
     $('p-schedule-weekly').addEventListener('change', () => {
-      if ($('p-schedule-weekly').checked) {
-        copySameScheduleToWeekdays();
-        syncScheduleModeUi();
-        updateHpCardSummary();
-        scheduleSave();
-      }
+      if ($('p-schedule-weekly').checked) copySameScheduleToWeekdays();
+      syncScheduleModeUi();
+      updateHpCardSummary();
+      scheduleSave();
     });
   }
 
@@ -1593,6 +1596,10 @@
       if (day.status === 'scheduled') {
         startCell = `<strong>${day.hpStart}</strong>`;
         note = `${day.heatingMinutes} min heating`;
+        noteClass = 'schedule-ok';
+      } else if (day.status === 'active') {
+        startCell = `<strong>${day.hpStart}</strong>`;
+        note = day.message || 'Heating now';
         noteClass = 'schedule-ok';
       } else if (day.status === 'at_target') {
         startCell = 'Not needed';
